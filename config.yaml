@@ -17,24 +17,6 @@ platforms:
           - name: GitPilot
             path: F:\Project\GitPilot
             enabled: false
-          - name: nakama
-            path: F:\Project\nakama
-            enabled: false
-          - name: DevPack
-            path: F:\Project\DevPack
-            enabled: false
-          - name: go-desk-service
-            path: F:\Project\go-desk\go-desk-service
-            enabled: false
-          - name: go-desk-wails
-            path: F:\Project\go-desk\go-desk-wails
-            enabled: false
-          - name: go-game
-            path: F:\Project\go-game
-            enabled: false
-          - name: PeterAgent
-            path: F:\Project\PeterAgent
-            enabled: false
 settings:
   concurrency: 6
   network_check: true
