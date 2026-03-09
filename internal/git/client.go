@@ -119,6 +119,16 @@ func (g *GitClient) Log(path string, count int) (string, error) {
 	)
 }
 
+// UnpushedCommits 获取当前分支上未推送到远程的提交哈希列表
+func (g *GitClient) UnpushedCommits(path, branch string) (string, error) {
+	return g.Run(path, "rev-list", "origin/"+branch+"..HEAD")
+}
+
+// RevertCommit 撤回指定提交（创建一个反向提交）
+func (g *GitClient) RevertCommit(path, hash string) (string, error) {
+	return g.Run(path, "revert", "--no-edit", hash)
+}
+
 // BranchList 获取所有本地分支
 func (g *GitClient) BranchList(path string) (string, error) {
 	return g.Run(path, "branch", "--format=%(refname:short)\t%(HEAD)")

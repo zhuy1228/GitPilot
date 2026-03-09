@@ -133,6 +133,13 @@ export class CommitLog {
              */
             this["message"] = "";
         }
+        if (!("pushed" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["pushed"] = false;
+        }
 
         Object.assign(this, $$source);
     }

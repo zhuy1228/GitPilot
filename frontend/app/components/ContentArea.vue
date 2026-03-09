@@ -19,6 +19,7 @@ import {
   UserOutlined,
   RollbackOutlined,
   ExclamationCircleOutlined,
+  CloseCircleOutlined,
 } from '@ant-design/icons-vue'
 import { Modal } from 'ant-design-vue'
 import { AppService } from '../../bindings/github.com/zhuy1228/GitPilot/internal/app'
@@ -614,6 +615,33 @@ async function resetToCommit(commit, mode = 'hard') {
   })
 }
 
+async function revertCommit(commit) {
+  if (!props.project?.path || !commit) return
+  Modal.confirm({
+    title: '确认撤回提交',
+    icon: h(ExclamationCircleOutlined),
+    content: h('div', [
+      h('p', '将创建一个新提交来撤回以下提交的更改：'),
+      h('p', { style: 'font-family: monospace; color: #89b4fa;' }, `${commit.shortHash} - ${commit.message}`),
+      h('p', { style: 'color: var(--text-muted); font-size: 12px; margin-top: 8px;' }, '此操作会生成一个新的反向提交，不会丢失历史记录。'),
+    ]),
+    okText: '确认撤回',
+    cancelText: '取消',
+    okButtonProps: { danger: true },
+    async onOk() {
+      try {
+        await AppService.RevertCommit(props.project.path, commit.hash)
+        await loadStatus()
+        selectedCommit.value = null
+        commitDiff.value = ''
+      } catch (e) {
+        console.error('撤回提交失败:', e)
+        Modal.error({ title: '撤回失败', content: String(e) })
+      }
+    },
+  })
+}
+
 function formatTime(ts) {
   if (!ts) return ''
   const d = new Date(ts * 1000)
@@ -842,41 +870,56 @@ function formatTime(ts) {
                       v-for="log in commitLogs"
                       :key="log.hash"
                       class="commit-item"
-                      :class="{ active: selectedCommit?.hash === log.hash }"
+                      :class="{ active: selectedCommit?.hash === log.hash, unpushed: !log.pushed }"
                       @click="selectCommit(log)"
                     >
                       <div class="commit-msg-row">
+                        <span v-if="!log.pushed" class="commit-unpushed-dot" title="未推送"></span>
                         <div class="commit-msg">{{ log.message }}</div>
-                        <a-dropdown :trigger="['click']" @click.stop>
+                        <div class="commit-action-btns" @click.stop>
+                          <!-- 撤回按钮 -->
                           <a-button
                             type="text"
                             size="small"
-                            class="commit-reset-btn"
-                            :loading="resetLoading"
-                            @click.stop
+                            class="commit-action-btn"
+                            title="撤回此提交"
+                            @click.stop="revertCommit(log)"
                           >
-                            <template #icon><RollbackOutlined /></template>
+                            <template #icon><CloseCircleOutlined /></template>
                           </a-button>
-                          <template #overlay>
-                            <a-menu @click="({ key }) => resetToCommit(log, key)">
-                              <a-menu-item key="hard">
-                                <span style="color: #f38ba8;">🔴 硬回滚</span>
-                                <span style="font-size: 11px; color: var(--text-muted); margin-left: 8px;">丢弃所有更改</span>
-                              </a-menu-item>
-                              <a-menu-item key="mixed">
-                                <span style="color: #fab387;">🟡 混合回滚</span>
-                                <span style="font-size: 11px; color: var(--text-muted); margin-left: 8px;">保留到工作区</span>
-                              </a-menu-item>
-                              <a-menu-item key="soft">
-                                <span style="color: #a6e3a1;">🟢 软回滚</span>
-                                <span style="font-size: 11px; color: var(--text-muted); margin-left: 8px;">保留到暂存区</span>
-                              </a-menu-item>
-                            </a-menu>
-                          </template>
-                        </a-dropdown>
+                          <!-- 回滚下拉 -->
+                          <a-dropdown :trigger="['click']">
+                            <a-button
+                              type="text"
+                              size="small"
+                              class="commit-action-btn"
+                              :loading="resetLoading"
+                              @click.stop
+                            >
+                              <template #icon><RollbackOutlined /></template>
+                            </a-button>
+                            <template #overlay>
+                              <a-menu @click="({ key }) => resetToCommit(log, key)">
+                                <a-menu-item key="hard">
+                                  <span style="color: #f38ba8;">🔴 硬回滚</span>
+                                  <span style="font-size: 11px; color: var(--text-muted); margin-left: 8px;">丢弃所有更改</span>
+                                </a-menu-item>
+                                <a-menu-item key="mixed">
+                                  <span style="color: #fab387;">🟡 混合回滚</span>
+                                  <span style="font-size: 11px; color: var(--text-muted); margin-left: 8px;">保留到工作区</span>
+                                </a-menu-item>
+                                <a-menu-item key="soft">
+                                  <span style="color: #a6e3a1;">🟢 软回滚</span>
+                                  <span style="font-size: 11px; color: var(--text-muted); margin-left: 8px;">保留到暂存区</span>
+                                </a-menu-item>
+                              </a-menu>
+                            </template>
+                          </a-dropdown>
+                        </div>
                       </div>
                       <div class="commit-meta">
                         <span class="commit-hash">{{ log.shortHash }}</span>
+                        <span v-if="!log.pushed" class="commit-push-tag">未推送</span>
                         <span class="commit-author"><UserOutlined /> {{ log.author }}</span>
                         <span class="commit-time">{{ formatTime(log.timestamp) }}</span>
                       </div>
@@ -1379,20 +1422,50 @@ function formatTime(ts) {
   min-width: 0;
 }
 
-.commit-reset-btn {
-  visibility: hidden;
-  color: var(--text-muted) !important;
+.commit-action-btns {
+  display: flex;
+  align-items: center;
+  gap: 0;
   flex-shrink: 0;
+  visibility: hidden;
+}
+
+.commit-action-btn {
+  color: var(--text-muted) !important;
   width: 24px;
   height: 24px;
 }
 
-.commit-reset-btn:hover {
+.commit-action-btn:hover {
   color: #f38ba8 !important;
 }
 
-.commit-item:hover .commit-reset-btn {
+.commit-item:hover .commit-action-btns {
   visibility: visible;
+}
+
+/* 未推送标识 */
+.commit-unpushed-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #a6e3a1;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+
+.commit-push-tag {
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: rgba(166, 227, 161, 0.15);
+  color: #a6e3a1;
+  line-height: 16px;
+  flex-shrink: 0;
+}
+
+.commit-item.unpushed {
+  border-left: 2px solid #a6e3a1;
 }
 
 .commit-msg {

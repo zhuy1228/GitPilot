@@ -569,6 +569,7 @@ type CommitLog struct {
 	Email     string `json:"email"`
 	Timestamp int64  `json:"timestamp"`
 	Message   string `json:"message"`
+	Pushed    bool   `json:"pushed"`
 }
 
 // BranchInfo 分支信息
@@ -589,7 +590,39 @@ func (s *AppService) GetCommitLog(path string, count int) ([]CommitLog, error) {
 	if err != nil {
 		return nil, fmt.Errorf("获取提交历史失败: %w", err)
 	}
-	return parseCommitLog(out), nil
+	logs := parseCommitLog(out)
+
+	// 获取当前分支名，查询未推送的提交
+	branch, brErr := s.gitClient.Branch(path)
+	if brErr == nil {
+		branch = strings.TrimSpace(branch)
+		unpushedOut, upErr := s.gitClient.UnpushedCommits(path, branch)
+		unpushedSet := make(map[string]bool)
+		if upErr == nil {
+			for _, h := range strings.Split(strings.TrimSpace(unpushedOut), "\n") {
+				if h != "" {
+					unpushedSet[h] = true
+				}
+			}
+		}
+		for i := range logs {
+			logs[i].Pushed = !unpushedSet[logs[i].Hash]
+		}
+	}
+
+	return logs, nil
+}
+
+// RevertCommit 撤回指定提交（生成一个反向提交）
+func (s *AppService) RevertCommit(path, hash string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("项目路径不存在: %s", path)
+	}
+	if strings.TrimSpace(hash) == "" {
+		return fmt.Errorf("提交哈希不能为空")
+	}
+	_, err := s.gitClient.RevertCommit(path, strings.TrimSpace(hash))
+	return err
 }
 
 func parseCommitLog(output string) []CommitLog {

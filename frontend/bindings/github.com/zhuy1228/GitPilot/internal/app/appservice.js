@@ -283,6 +283,16 @@ export function ResetProject(path, hash, mode) {
 }
 
 /**
+ * RevertCommit 撤回指定提交（生成一个反向提交）
+ * @param {string} path
+ * @param {string} hash
+ * @returns {$CancellablePromise<void>}
+ */
+export function RevertCommit(path, hash) {
+    return $Call.ByID(1334788539, path, hash);
+}
+
+/**
  * SelectDirectory 打开系统文件夹选择器，返回选中的路径
  * @returns {$CancellablePromise<string>}
  */
