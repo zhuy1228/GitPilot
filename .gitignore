@@ -1,0 +1,5 @@
+bin/
+*.syso
+.task/
+actions_log.zip
+actions_logs/

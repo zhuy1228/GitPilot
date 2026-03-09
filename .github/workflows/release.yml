@@ -38,9 +38,6 @@ jobs:
       - name: Generate bindings
         run: wails3 generate bindings
 
-      - name: Generate icons
-        run: wails3 generate icons -input build/appicon.png -windowsDir build/windows -macDir build/darwin
-
       - name: Generate syso
         working-directory: build
         run: wails3 generate syso -arch amd64 -icon windows/icon.ico -manifest windows/wails.exe.manifest -info windows/info.json -out ../wails_windows_amd64.syso
@@ -67,11 +64,8 @@ jobs:
           name: gitpilot-windows-amd64
           path: bin/gitpilot-windows-amd64.zip
 
-  build-macos:
+  build-macos-arm64:
     runs-on: macos-latest
-    strategy:
-      matrix:
-        arch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v4
 
@@ -99,14 +93,11 @@ jobs:
       - name: Generate bindings
         run: wails3 generate bindings
 
-      - name: Generate icons
-        run: wails3 generate icons -input build/appicon.png -windowsDir build/windows -macDir build/darwin
-
       - name: Build
         env:
           CGO_ENABLED: 1
           GOOS: darwin
-          GOARCH: ${{ matrix.arch }}
+          GOARCH: arm64
           CGO_CFLAGS: "-mmacosx-version-min=10.15"
           CGO_LDFLAGS: "-mmacosx-version-min=10.15"
           MACOSX_DEPLOYMENT_TARGET: "10.15"
@@ -124,13 +115,72 @@ jobs:
       - name: Package
         run: |
           cd bin
-          zip -r gitpilot-macos-${{ matrix.arch }}.zip gitpilot.app config.yaml
+          zip -r gitpilot-macos-arm64.zip gitpilot.app
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gitpilot-macos-${{ matrix.arch }}
-          path: bin/gitpilot-macos-${{ matrix.arch }}.zip
+          name: gitpilot-macos-arm64
+          path: bin/gitpilot-macos-arm64.zip
+
+  build-macos-amd64:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
+
+      - name: Install frontend dependencies
+        run: npm install
+        working-directory: frontend
+
+      - name: Build frontend
+        run: npm run generate
+        working-directory: frontend
+
+      - name: Generate bindings
+        run: wails3 generate bindings
+
+      - name: Build
+        env:
+          CGO_ENABLED: 1
+          GOOS: darwin
+          GOARCH: amd64
+          CGO_CFLAGS: "-mmacosx-version-min=10.15"
+          CGO_LDFLAGS: "-mmacosx-version-min=10.15"
+          MACOSX_DEPLOYMENT_TARGET: "10.15"
+        run: go build -tags "production,disable_onnx" -trimpath -buildvcs=false -ldflags="-w -s" -o bin/gitpilot
+
+      - name: Create .app bundle
+        run: |
+          mkdir -p bin/gitpilot.app/Contents/{MacOS,Resources}
+          cp build/darwin/icons.icns bin/gitpilot.app/Contents/Resources/
+          cp bin/gitpilot bin/gitpilot.app/Contents/MacOS/
+          cp config.yaml bin/gitpilot.app/Contents/MacOS/config.yaml
+          cp build/darwin/Info.plist bin/gitpilot.app/Contents/
+          codesign --force --deep --sign - bin/gitpilot.app
+
+      - name: Package
+        run: |
+          cd bin
+          zip -r gitpilot-macos-amd64.zip gitpilot.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitpilot-macos-amd64
+          path: bin/gitpilot-macos-amd64.zip
 
   build-linux:
     runs-on: ubuntu-latest
@@ -166,9 +216,6 @@ jobs:
       - name: Generate bindings
         run: wails3 generate bindings
 
-      - name: Generate icons
-        run: wails3 generate icons -input build/appicon.png -windowsDir build/windows -macDir build/darwin
-
       - name: Build
         env:
           CGO_ENABLED: 1
@@ -191,7 +238,7 @@ jobs:
           path: bin/gitpilot-linux-amd64.tar.gz
 
   release:
-    needs: [build-windows, build-macos, build-linux]
+    needs: [build-windows, build-macos-arm64, build-macos-amd64, build-linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
