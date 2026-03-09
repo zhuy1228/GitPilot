@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "0.1.0"
+	},
+	"info": {
+		"0000": {
+			"ProductVersion": "0.1.0",
+			"CompanyName": "GitPilot",
+			"FileDescription": "Git Repository Management Tool",
+			"LegalCopyright": "© 2025, GitPilot",
+			"ProductName": "GitPilot",
+			"Comments": "GitPilot - Git Repository Manager"
+		}
+	}
+}

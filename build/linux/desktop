@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=Peter Agent
+Comment=AI Agent Application
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/peter-agent %u
+Terminal=false
+Type=Application
+Icon=peter-agent
+Categories=Utility;
+StartupWMClass=peter-agent
+
+ 
