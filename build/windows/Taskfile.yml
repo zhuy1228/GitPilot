@@ -18,6 +18,10 @@ tasks:
     cmds:
       - task: generate:syso
       - go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}.exe
+      - cmd: powershell Copy-Item config.yaml -Destination {{.BIN_DIR}}/config.yaml -Force
+        platforms: [windows]
+      - cmd: cp config.yaml {{.BIN_DIR}}/config.yaml
+        platforms: [linux, darwin]
       - cmd: powershell Remove-item *.syso
         platforms: [windows]
       - cmd: rm -f *.syso
@@ -31,9 +35,15 @@ tasks:
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
 
   package:
-    summary: Packages a production build of the application
+    summary: Packages a production build of the application into a zip file
+    deps:
+      - task: build
+        vars:
+          PRODUCTION: "true"
     cmds:
-      - task: create:nsis:installer
+      - cmd: powershell Compress-Archive -Path "{{.BIN_DIR}}/{{.APP_NAME}}.exe","{{.BIN_DIR}}/config.yaml" -DestinationPath "{{.BIN_DIR}}/{{.APP_NAME}}-windows-{{.ARCH}}.zip" -Force
+    vars:
+      ARCH: '{{.ARCH | default ARCH}}'
 
   generate:syso:
     summary: Generates Windows `.syso` file

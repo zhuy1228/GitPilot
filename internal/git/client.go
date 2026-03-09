@@ -129,6 +129,32 @@ func (g *GitClient) RevertCommit(path, hash string) (string, error) {
 	return g.Run(path, "revert", "--no-edit", hash)
 }
 
+// TagList 获取所有标签（按版本号降序，带创建时间和提交哈希）
+func (g *GitClient) TagList(path string) (string, error) {
+	return g.Run(path, "tag", "-l", "--sort=-version:refname",
+		"--format=%(refname:short)\t%(objectname:short)\t%(creatordate:unix)\t%(*objectname:short)\t%(contents:subject)")
+}
+
+// CreateTag 创建注释标签
+func (g *GitClient) CreateTag(path, name, message string) (string, error) {
+	return g.Run(path, "tag", "-a", name, "-m", message)
+}
+
+// DeleteTag 删除本地标签
+func (g *GitClient) DeleteTag(path, name string) (string, error) {
+	return g.Run(path, "tag", "-d", name)
+}
+
+// PushTag 推送标签到远程
+func (g *GitClient) PushTag(path, name string) (string, error) {
+	return g.Run(path, "push", "origin", name)
+}
+
+// DeleteRemoteTag 删除远程标签
+func (g *GitClient) DeleteRemoteTag(path, name string) (string, error) {
+	return g.Run(path, "push", "origin", "--delete", name)
+}
+
 // BranchList 获取所有本地分支
 func (g *GitClient) BranchList(path string) (string, error) {
 	return g.Run(path, "branch", "--format=%(refname:short)\t%(HEAD)")

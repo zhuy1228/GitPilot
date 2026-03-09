@@ -20,6 +20,11 @@ import {
   RollbackOutlined,
   ExclamationCircleOutlined,
   CloseCircleOutlined,
+  TagOutlined,
+  TagsOutlined,
+  CloudUploadOutlined as PushTagIcon,
+  DeleteOutlined,
+  SendOutlined,
 } from '@ant-design/icons-vue'
 import { Modal } from 'ant-design-vue'
 import { AppService } from '../../bindings/github.com/zhuy1228/GitPilot/internal/app'
@@ -61,6 +66,14 @@ const commitFilesLoading = ref(false)
 const selectedCommitFile = ref(null)
 const commitFileDiff = ref('')
 const commitCollapsedDirs = ref(new Set())
+
+// ---- 标签管理 ----
+const tags = ref([])
+const tagsLoading = ref(false)
+const showCreateTag = ref(false)
+const newTagName = ref('')
+const newTagMessage = ref('')
+const createTagLoading = ref(false)
 
 // ---- 文件列表拖拽调整宽度 ----
 const fileListWidth = ref(300)
@@ -653,6 +666,81 @@ function formatTime(ts) {
   if (diff < 604800) return Math.floor(diff / 86400) + ' 天前'
   return d.toLocaleDateString('zh-CN')
 }
+
+// ---- 标签管理 ----
+async function loadTags() {
+  if (!props.project?.path) return
+  tagsLoading.value = true
+  try {
+    const list = await AppService.GetTags(props.project.path)
+    tags.value = Array.isArray(list) ? list : []
+  } catch (e) {
+    console.error('获取标签失败:', e)
+    tags.value = []
+  } finally {
+    tagsLoading.value = false
+  }
+}
+
+async function createTag() {
+  if (!props.project?.path || !newTagName.value.trim()) return
+  createTagLoading.value = true
+  try {
+    await AppService.CreateTag(props.project.path, newTagName.value.trim(), newTagMessage.value.trim() || newTagName.value.trim())
+    newTagName.value = ''
+    newTagMessage.value = ''
+    showCreateTag.value = false
+    await loadTags()
+  } catch (e) {
+    console.error('创建标签失败:', e)
+    Modal.error({ title: '创建标签失败', content: String(e) })
+  } finally {
+    createTagLoading.value = false
+  }
+}
+
+async function deleteTag(tag) {
+  if (!props.project?.path) return
+  Modal.confirm({
+    title: '确认删除标签',
+    icon: h(ExclamationCircleOutlined),
+    content: h('div', [
+      h('p', `确定要删除标签吗？`),
+      h('p', { style: 'font-family: monospace; color: #89b4fa; font-size: 15px;' }, tag.name),
+      h('p', { style: 'color: var(--text-muted); font-size: 12px; margin-top: 8px;' }, '将同时删除本地和远程标签。'),
+    ]),
+    okText: '确认删除',
+    cancelText: '取消',
+    okButtonProps: { danger: true },
+    async onOk() {
+      try {
+        await AppService.DeleteTag(props.project.path, tag.name)
+        await loadTags()
+      } catch (e) {
+        console.error('删除标签失败:', e)
+        Modal.error({ title: '删除失败', content: String(e) })
+      }
+    },
+  })
+}
+
+async function pushTag(tag) {
+  if (!props.project?.path) return
+  try {
+    await AppService.PushTag(props.project.path, tag.name)
+    Modal.success({ title: '推送成功', content: `标签 ${tag.name} 已推送到远程` })
+  } catch (e) {
+    console.error('推送标签失败:', e)
+    Modal.error({ title: '推送失败', content: String(e) })
+  }
+}
+
+// 切换到标签 Tab 时加载标签
+watch(activeTab, (tab) => {
+  if (tab === 'tags' && !tags.value.length && !tagsLoading.value) {
+    loadTags()
+  }
+})
 </script>
 
 <template>
@@ -747,6 +835,9 @@ function formatTime(ts) {
               </div>
               <div class="file-list-tab" :class="{ active: activeTab === 'history' }" @click="activeTab = 'history'">
                 <HistoryOutlined /> 历史
+              </div>
+              <div class="file-list-tab" :class="{ active: activeTab === 'tags' }" @click="activeTab = 'tags'">
+                <TagsOutlined /> 标签
               </div>
             </div>
 
@@ -852,7 +943,7 @@ function formatTime(ts) {
             </template>
 
             <!-- ===== 提交历史面板 ===== -->
-            <template v-else>
+            <template v-else-if="activeTab === 'history'">
               <div class="file-list-content history-panel">
                 <!-- 提交列表区域 -->
                 <div class="commit-list-section" :class="{ 'has-selected': selectedCommit }">
@@ -994,6 +1085,79 @@ function formatTime(ts) {
                 </template>
               </div>
             </template>
+
+            <!-- ===== 标签管理面板 ===== -->
+            <template v-else-if="activeTab === 'tags'">
+              <div class="file-list-content tags-panel">
+                <!-- 创建标签区域 -->
+                <div class="tag-create-box">
+                  <div v-if="!showCreateTag" style="display: flex; justify-content: flex-end; padding: 6px 0;">
+                    <a-button size="small" type="primary" @click="showCreateTag = true">
+                      <template #icon><PlusOutlined /></template>
+                      新建标签
+                    </a-button>
+                  </div>
+                  <template v-else>
+                    <a-input v-model:value="newTagName" placeholder="标签名 (例: v1.0.0)" size="small" style="margin-bottom: 6px;" @pressEnter="createTag" />
+                    <a-input v-model:value="newTagMessage" placeholder="标签描述 (可选)" size="small" style="margin-bottom: 6px;" />
+                    <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                      <a-button size="small" @click="showCreateTag = false; newTagName = ''; newTagMessage = ''">取消</a-button>
+                      <a-button size="small" type="primary" :loading="createTagLoading" :disabled="!newTagName.trim()" @click="createTag">创建</a-button>
+                    </div>
+                  </template>
+                </div>
+
+                <!-- 标签列表 -->
+                <div class="tag-list-section">
+                  <template v-if="tagsLoading">
+                    <div v-for="i in 5" :key="i" style="padding: 10px 12px;">
+                      <div style="height: 14px; background: var(--bg-hover, #333); border-radius: 4px; animation: pulse 1.5s infinite;" :style="{ width: (40 + i * 8) + '%' }"></div>
+                    </div>
+                  </template>
+                  <div v-else-if="!tags.length" style="padding: 24px; text-align: center; color: var(--text-muted);">
+                    <TagOutlined :style="{ fontSize: '28px', marginBottom: '8px' }" />
+                    <div>暂无标签</div>
+                  </div>
+                  <template v-else>
+                    <div
+                      v-for="tag in tags"
+                      :key="tag.name"
+                      class="tag-item"
+                    >
+                      <div class="tag-main-row">
+                        <TagOutlined class="tag-icon" />
+                        <span class="tag-name">{{ tag.name }}</span>
+                        <div class="tag-action-btns" @click.stop>
+                          <a-tooltip title="推送到远程">
+                            <a-button type="text" size="small" class="tag-action-btn push" @click="pushTag(tag)">
+                              <template #icon><SendOutlined /></template>
+                            </a-button>
+                          </a-tooltip>
+                          <a-tooltip title="删除标签">
+                            <a-button type="text" size="small" class="tag-action-btn delete" @click="deleteTag(tag)">
+                              <template #icon><DeleteOutlined /></template>
+                            </a-button>
+                          </a-tooltip>
+                        </div>
+                      </div>
+                      <div class="tag-meta">
+                        <span class="tag-hash">{{ tag.hash }}</span>
+                        <span v-if="tag.message" class="tag-message">{{ tag.message }}</span>
+                        <span class="tag-time">{{ formatTime(tag.timestamp) }}</span>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+
+                <!-- 刷新按钮 -->
+                <div style="padding: 8px 10px; border-top: 1px solid var(--border-color); text-align: center;">
+                  <a-button size="small" :loading="tagsLoading" @click="loadTags" block>
+                    <template #icon><ReloadOutlined /></template>
+                    刷新标签
+                  </a-button>
+                </div>
+              </div>
+            </template>
           </div>
 
           <!-- 拖拽分隔条 -->
@@ -1023,7 +1187,7 @@ function formatTime(ts) {
               </template>
             </template>
             <!-- 历史模式的文件 Diff -->
-            <template v-else>
+            <template v-else-if="activeTab === 'history'">
               <div v-if="!selectedCommit" class="empty-state small">
                 <span style="color: var(--text-muted)">点击左侧提交查看详情</span>
               </div>
@@ -1046,6 +1210,14 @@ function formatTime(ts) {
                   <pre class="code-block diff-block"><code v-html="formatDiff(commitFileDiff)"></code></pre>
                 </div>
               </template>
+            </template>
+            <!-- 标签模式 -->
+            <template v-else-if="activeTab === 'tags'">
+              <div class="empty-state small">
+                <TagsOutlined :style="{ fontSize: '48px', color: 'var(--text-muted)', marginBottom: '8px' }" />
+                <span style="color: var(--text-muted)">在左侧管理项目标签</span>
+                <span style="color: var(--text-muted); font-size: 12px; margin-top: 4px;">共 {{ tags.length }} 个标签</span>
+              </div>
             </template>
           </div>
         </div>
@@ -1581,6 +1753,109 @@ function formatTime(ts) {
   font-size: 11px;
   color: var(--text-muted);
   margin-left: 4px;
+  flex-shrink: 0;
+}
+
+/* 标签管理面板 */
+.tags-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.tag-create-box {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tag-list-section {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.tag-item {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.04));
+  transition: background 0.12s;
+}
+
+.tag-item:hover {
+  background: var(--bg-hover);
+}
+
+.tag-main-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tag-icon {
+  color: var(--accent, #89b4fa);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.tag-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tag-action-btns {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+  visibility: hidden;
+}
+
+.tag-item:hover .tag-action-btns {
+  visibility: visible;
+}
+
+.tag-action-btn {
+  width: 24px;
+  height: 24px;
+  color: var(--text-muted) !important;
+}
+
+.tag-action-btn.push:hover {
+  color: var(--accent, #89b4fa) !important;
+}
+
+.tag-action-btn.delete:hover {
+  color: var(--danger, #f38ba8) !important;
+}
+
+.tag-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  padding-left: 20px;
+}
+
+.tag-hash {
+  font-family: 'Consolas', 'Courier New', monospace;
+  color: var(--accent, #89b4fa);
+}
+
+.tag-message {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tag-time {
+  margin-left: auto;
   flex-shrink: 0;
 }
 </style>

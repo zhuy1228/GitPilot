@@ -63,6 +63,27 @@ export function CommitChanges(path, message) {
 }
 
 /**
+ * CreateTag 创建标签
+ * @param {string} path
+ * @param {string} name
+ * @param {string} message
+ * @returns {$CancellablePromise<void>}
+ */
+export function CreateTag(path, name, message) {
+    return $Call.ByID(4209616956, path, name, message);
+}
+
+/**
+ * DeleteTag 删除标签（本地+远程）
+ * @param {string} path
+ * @param {string} name
+ * @returns {$CancellablePromise<void>}
+ */
+export function DeleteTag(path, name) {
+    return $Call.ByID(873653241, path, name);
+}
+
+/**
  * DiscardFiles 丢弃工作区指定文件的更改
  * @param {string} path
  * @param {string[]} files
@@ -211,6 +232,17 @@ export function GetProjectTree() {
 }
 
 /**
+ * GetTags 获取所有标签
+ * @param {string} path
+ * @returns {$CancellablePromise<$models.TagInfo[]>}
+ */
+export function GetTags(path) {
+    return $Call.ByID(3979169621, path).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType15($result);
+    }));
+}
+
+/**
  * GetUserInfo 获取用户信息
  * @param {string} platform
  * @param {string} username
@@ -218,7 +250,7 @@ export function GetProjectTree() {
  */
 export function GetUserInfo(platform, username) {
     return $Call.ByID(2674655707, platform, username).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType15($result);
+        return $$createType17($result);
     }));
 }
 
@@ -238,6 +270,16 @@ export function PullProject(path) {
  */
 export function PushProject(path) {
     return $Call.ByID(3887901113, path);
+}
+
+/**
+ * PushTag 推送标签到远程
+ * @param {string} path
+ * @param {string} name
+ * @returns {$CancellablePromise<void>}
+ */
+export function PushTag(path, name) {
+    return $Call.ByID(1424810524, path, name);
 }
 
 /**
@@ -393,5 +435,7 @@ const $$createType10 = $models.ProjectStatus.createFrom;
 const $$createType11 = $Create.Nullable($$createType10);
 const $$createType12 = $models.TreeNode.createFrom;
 const $$createType13 = $Create.Array($$createType12);
-const $$createType14 = $models.UserInfo.createFrom;
-const $$createType15 = $Create.Nullable($$createType14);
+const $$createType14 = $models.TagInfo.createFrom;
+const $$createType15 = $Create.Array($$createType14);
+const $$createType16 = $models.UserInfo.createFrom;
+const $$createType17 = $Create.Nullable($$createType16);

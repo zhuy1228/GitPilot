@@ -17,6 +17,7 @@ tasks:
       - task: common:generate:icons
     cmds:
       - go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}
+      - cp config.yaml {{.BIN_DIR}}/config.yaml
     vars:
       BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags "production,disable_onnx" -trimpath -buildvcs=false -ldflags="-w -s"{{else}}-tags "disable_onnx" -buildvcs=false -gcflags=all="-l"{{end}}'
     env:

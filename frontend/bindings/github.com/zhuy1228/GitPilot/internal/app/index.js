@@ -14,6 +14,7 @@ export {
     FileInfo,
     PlatformInfo,
     ProjectStatus,
+    TagInfo,
     TreeNode,
     UserInfo
 } from "./models.js";

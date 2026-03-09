@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -35,9 +36,18 @@ type AppConfig struct {
 	Settings  Settings            `yaml:"settings"`
 }
 
+// configPath 返回 config.yaml 的绝对路径（与可执行文件同目录）
+func configPath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "config.yaml"
+	}
+	return filepath.Join(filepath.Dir(exe), "config.yaml")
+}
+
 // LoadConfig 从 config.yaml 文件加载配置
 func LoadConfig() (*AppConfig, error) {
-	file, err := os.Open("config.yaml")
+	file, err := os.Open(configPath())
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +65,7 @@ func LoadConfig() (*AppConfig, error) {
 
 // SaveConfig 将配置保存到 config.yaml 文件
 func SaveConfig(config *AppConfig) error {
-	file, err := os.OpenFile("config.yaml", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	file, err := os.OpenFile(configPath(), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
 	if err != nil {
 		return err
 	}

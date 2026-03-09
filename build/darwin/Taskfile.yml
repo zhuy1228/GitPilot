@@ -17,6 +17,7 @@ tasks:
       - task: common:generate:icons
     cmds:
       - go build {{.BUILD_FLAGS}} -o {{.OUTPUT}}
+      - cp config.yaml {{.BIN_DIR}}/config.yaml
     vars:
       BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags "production,disable_onnx" -trimpath -buildvcs=false -ldflags="-w -s"{{else}}-tags "disable_onnx" -buildvcs=false -gcflags=all="-l"{{end}}'
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.APP_NAME}}'
@@ -68,6 +69,7 @@ tasks:
       - mkdir -p {{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/{MacOS,Resources}
       - cp build/darwin/icons.icns {{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources
       - cp {{.BIN_DIR}}/{{.APP_NAME}} {{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS
+      - cp {{.BIN_DIR}}/config.yaml {{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS/config.yaml
       - cp build/darwin/Info.plist {{.BIN_DIR}}/{{.APP_NAME}}.app/Contents
       - codesign --force --deep --sign - {{.BIN_DIR}}/{{.APP_NAME}}.app
 

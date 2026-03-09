@@ -701,3 +701,97 @@ func (s *AppService) SwitchBranch(path, branch string) error {
 	_, err := s.gitClient.Checkout(path, strings.TrimSpace(branch))
 	return err
 }
+
+// TagInfo 标签信息
+type TagInfo struct {
+	Name      string `json:"name"`
+	Hash      string `json:"hash"`
+	Timestamp int64  `json:"timestamp"`
+	Message   string `json:"message"`
+}
+
+// GetTags 获取所有标签
+func (s *AppService) GetTags(path string) ([]TagInfo, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, fmt.Errorf("项目路径不存在: %s", path)
+	}
+	out, err := s.gitClient.TagList(path)
+	if err != nil {
+		return nil, fmt.Errorf("获取标签列表失败: %w", err)
+	}
+	var tags []TagInfo
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "\t", 5)
+		if len(parts) < 3 {
+			continue
+		}
+		var ts int64
+		fmt.Sscanf(parts[2], "%d", &ts)
+		hash := parts[1]
+		// 注释标签的实际提交哈希在 *objectname
+		if len(parts) > 3 && parts[3] != "" {
+			hash = parts[3]
+		}
+		message := ""
+		if len(parts) > 4 {
+			message = parts[4]
+		}
+		tags = append(tags, TagInfo{
+			Name:      parts[0],
+			Hash:      hash,
+			Timestamp: ts,
+			Message:   message,
+		})
+	}
+	return tags, nil
+}
+
+// CreateTag 创建标签
+func (s *AppService) CreateTag(path, name, message string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("项目路径不存在: %s", path)
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("标签名不能为空")
+	}
+	if strings.TrimSpace(message) == "" {
+		message = name
+	}
+	_, err := s.gitClient.CreateTag(path, name, message)
+	return err
+}
+
+// DeleteTag 删除标签（本地+远程）
+func (s *AppService) DeleteTag(path, name string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("项目路径不存在: %s", path)
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("标签名不能为空")
+	}
+	// 删除本地标签
+	if _, err := s.gitClient.DeleteTag(path, name); err != nil {
+		return fmt.Errorf("删除本地标签失败: %w", err)
+	}
+	// 尝试删除远程标签（忽略错误，可能未推送过）
+	s.gitClient.DeleteRemoteTag(path, name)
+	return nil
+}
+
+// PushTag 推送标签到远程
+func (s *AppService) PushTag(path, name string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("项目路径不存在: %s", path)
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("标签名不能为空")
+	}
+	_, err := s.gitClient.PushTag(path, name)
+	return err
+}

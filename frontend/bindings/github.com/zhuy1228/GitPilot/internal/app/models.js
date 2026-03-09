@@ -295,6 +295,58 @@ export class ProjectStatus {
 }
 
 /**
+ * TagInfo 标签信息
+ */
+export class TagInfo {
+    /**
+     * Creates a new TagInfo instance.
+     * @param {Partial<TagInfo>} [$$source = {}] - The source object to create the TagInfo.
+     */
+    constructor($$source = {}) {
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("hash" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["hash"] = "";
+        }
+        if (!("timestamp" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["timestamp"] = 0;
+        }
+        if (!("message" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["message"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TagInfo instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {TagInfo}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new TagInfo(/** @type {Partial<TagInfo>} */($$parsedSource));
+    }
+}
+
+/**
  * TreeNode 前端侧边栏树节点
  */
 export class TreeNode {
