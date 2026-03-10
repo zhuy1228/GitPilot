@@ -38,6 +38,7 @@ func (g *GitClient) Run(path string, args ...string) (string, error) {
 	argsArr := append(header, args...)
 	log.Println(argsArr)
 	cmd := exec.CommandContext(ctx, "git", argsArr...)
+	hideWindow(cmd)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
