@@ -55,11 +55,18 @@ jobs:
       - name: Remove syso
         run: Remove-Item *.syso
 
-      - name: Package
-        run: Compress-Archive -Path "bin/gitpilot.exe","bin/config.yaml" -DestinationPath "bin/gitpilot-windows-amd64.zip" -Force
+      - name: Install NSIS
+        run: choco install nsis -y
+
+      - name: Generate WebView2 Bootstrapper
+        run: wails3 generate webview2bootstrapper -dir build/windows/nsis
+
+      - name: Create NSIS Installer
+        run: |
+          & "C:\Program Files (x86)\NSIS\makensis.exe" -DARG_WAILS_AMD64_BINARY="${{ github.workspace }}\bin\gitpilot.exe" "${{ github.workspace }}\build\windows\nsis\project.nsi"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: bin/gitpilot-windows-amd64.zip
+          files: bin/gitpilot-amd64-installer.exe

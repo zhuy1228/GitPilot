@@ -35,15 +35,17 @@ tasks:
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
 
   package:
-    summary: Packages a production build of the application into a zip file
+    summary: Packages a production build of the application into a NSIS installer
     deps:
       - task: build
         vars:
           PRODUCTION: "true"
     cmds:
-      - cmd: powershell Compress-Archive -Path "{{.BIN_DIR}}/{{.APP_NAME}}.exe","{{.BIN_DIR}}/config.yaml" -DestinationPath "{{.BIN_DIR}}/{{.APP_NAME}}-windows-{{.ARCH}}.zip" -Force
+      - wails3 generate webview2bootstrapper -dir "{{.ROOT_DIR}}/build/windows/nsis"
+      - cmd: '"C:\Program Files (x86)\NSIS\makensis.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR | replace "/" "\\"}}\\{{.BIN_DIR}}\\{{.APP_NAME}}.exe" "{{.ROOT_DIR | replace "/" "\\"}}\\build\\windows\\nsis\\project.nsi"'
     vars:
       ARCH: '{{.ARCH | default ARCH}}'
+      ARG_FLAG: '{{if eq .ARCH "amd64"}}AMD64{{else}}ARM64{{end}}'
 
   generate:syso:
     summary: Generates Windows `.syso` file
