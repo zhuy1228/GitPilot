@@ -65,7 +65,28 @@ func (g *GitClient) Status(path string) (string, error) {
 }
 
 func (g *GitClient) Clone(repoURL, path string) (string, error) {
-	return g.Run(".", "clone", repoURL, path)
+	// Clone 操作可能需要较长时间，使用独立的超时设置（10 分钟）
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	args := []string{"-c", "core.quotePath=false"}
+	if g.Enabled {
+		args = append(args, "-c", "http.proxy="+g.Proxy, "-c", "https.proxy="+g.Proxy)
+	}
+	args = append(args, "clone", "--progress", repoURL, path)
+	log.Println(args)
+	cmd := exec.CommandContext(ctx, "git", args...)
+	hideWindow(cmd)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if ctx.Err() == context.DeadlineExceeded {
+		return "", fmt.Errorf("git clone timeout")
+	}
+	if err != nil {
+		return "", fmt.Errorf("git clone error: %v, stderr: %s", err, stderr.String())
+	}
+	return stdout.String(), nil
 }
 
 func (g *GitClient) Fetch(path string) (string, error) {

@@ -7,7 +7,10 @@ import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
+  CloudDownloadOutlined,
+  LoadingOutlined,
 } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
 import { AppService } from '../../bindings/github.com/zhuy1228/GitPilot/internal/app'
 
 const props = defineProps({
@@ -23,6 +26,11 @@ const selectedKeys = ref([])
 // 添加项目弹窗
 const showAddDialog = ref(false)
 const addForm = ref({ platform: '', username: '', name: '', path: '' })
+
+// 克隆项目弹窗
+const showCloneDialog = ref(false)
+const cloneForm = ref({ platform: '', username: '', repoURL: '', parentDir: '', name: '' })
+const cloneLoading = ref(false)
 
 // 右键菜单
 const contextMenu = ref({ visible: false, x: 0, y: 0, type: '', data: {} })
@@ -142,6 +150,7 @@ function onContextMenuClick({ key: action }) {
     case 'edit-platform': openEditPlatformDialog(data.key); break
     case 'remove-platform': removePlatform(data.key); break
     case 'add-project': openAddDialog(data.platformKey, data.username); break
+    case 'clone-project': openCloneDialog(data.platformKey, data.username); break
     case 'edit-user': openEditUserDialog(data.platformKey, data.username); break
     case 'remove-user': removeUser(data.platformKey, data.username); break
     case 'remove-project': removeProject(data.platformKey, data.username, data.name); break
@@ -166,6 +175,7 @@ const contextMenuItems = computed(() => {
   if (type === 'user') {
     return [
       { key: 'add-project', label: '添加项目', icon: h(FolderOutlined) },
+      { key: 'clone-project', label: '克隆项目', icon: h(CloudDownloadOutlined) },
       { key: 'edit-user', label: '编辑用户', icon: h(EditOutlined) },
       { type: 'divider' },
       { key: 'remove-user', label: '删除用户', danger: true, icon: h(DeleteOutlined) },
@@ -174,6 +184,7 @@ const contextMenuItems = computed(() => {
   if (type === 'project') {
     return [
       { key: 'add-project', label: '添加项目', icon: h(FolderOutlined) },
+      { key: 'clone-project', label: '克隆项目', icon: h(CloudDownloadOutlined) },
       { type: 'divider' },
       { key: 'remove-project', label: '删除项目', danger: true, icon: h(DeleteOutlined) },
     ]
@@ -320,6 +331,57 @@ async function addProject() {
   }
 }
 
+// --- 克隆项目 ---
+function openCloneDialog(platformKey, username) {
+  cloneForm.value = { platform: platformKey, username: username, repoURL: '', parentDir: '', name: '' }
+  showCloneDialog.value = true
+}
+
+async function pickCloneDirectory() {
+  try {
+    const path = await AppService.SelectDirectory()
+    if (path) {
+      cloneForm.value.parentDir = path
+    }
+  } catch (e) {
+    console.error('选择文件夹失败:', e)
+  }
+}
+
+function onRepoURLChange() {
+  // 从仓库 URL 自动提取项目名称
+  if (!cloneForm.value.name && cloneForm.value.repoURL) {
+    const url = cloneForm.value.repoURL.trim()
+    const match = url.match(/\/([^\/]+?)(\.git)?$/)
+    if (match) {
+      cloneForm.value.name = match[1]
+    }
+  }
+}
+
+async function cloneProject() {
+  if (!cloneForm.value.repoURL || !cloneForm.value.parentDir || !cloneForm.value.name) return
+  cloneLoading.value = true
+  try {
+    await AppService.CloneProject(
+      cloneForm.value.platform,
+      cloneForm.value.username,
+      cloneForm.value.repoURL,
+      cloneForm.value.parentDir,
+      cloneForm.value.name
+    )
+    showCloneDialog.value = false
+    message.success('克隆成功')
+    await loadTree()
+    emit('tree-updated')
+  } catch (e) {
+    console.error('克隆项目失败:', e)
+    message.error('克隆失败: ' + String(e))
+  } finally {
+    cloneLoading.value = false
+  }
+}
+
 async function removeProject(platform, username, name) {
   if (!confirm(`确定删除项目 "${name}" 吗？`)) return
   try {
@@ -438,6 +500,53 @@ onMounted(() => {
             </template>
           </a-input>
         </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 克隆项目弹窗 -->
+    <a-modal
+      v-model:open="showCloneDialog"
+      title="克隆项目"
+      @ok="cloneProject"
+      :ok-text="cloneLoading ? '克隆中...' : '克隆'"
+      cancel-text="取消"
+      :ok-button-props="{ loading: cloneLoading, disabled: !cloneForm.repoURL || !cloneForm.parentDir || !cloneForm.name }"
+      :closable="!cloneLoading"
+      :maskClosable="!cloneLoading"
+      :width="480"
+    >
+      <a-form layout="vertical" :style="{ marginTop: '16px' }">
+        <a-form-item label="平台">
+          <a-input :value="cloneForm.platform" disabled />
+        </a-form-item>
+        <a-form-item label="用户">
+          <a-input :value="cloneForm.username" disabled />
+        </a-form-item>
+        <a-form-item label="仓库地址" required>
+          <a-input
+            v-model:value="cloneForm.repoURL"
+            placeholder="https://github.com/user/repo.git"
+            @blur="onRepoURLChange"
+          />
+        </a-form-item>
+        <a-form-item label="克隆到目录" required>
+          <a-input v-model:value="cloneForm.parentDir" placeholder="选择父目录" read-only>
+            <template #suffix>
+              <FolderOpenOutlined
+                style="cursor: pointer; color: var(--accent, #89b4fa);"
+                title="选择文件夹"
+                @click="pickCloneDirectory"
+              />
+            </template>
+          </a-input>
+        </a-form-item>
+        <a-form-item label="项目名称" required>
+          <a-input v-model:value="cloneForm.name" placeholder="自动从仓库地址提取" />
+        </a-form-item>
+        <div v-if="cloneForm.parentDir && cloneForm.name" style="font-size: 12px; color: var(--text-muted); margin-top: -8px; margin-bottom: 8px;">
+          <span>目标路径：</span>
+          <span style="color: var(--accent, #89b4fa);">{{ cloneForm.parentDir }}/{{ cloneForm.name }}</span>
+        </div>
       </a-form>
     </a-modal>
 

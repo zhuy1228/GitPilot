@@ -97,6 +97,31 @@ func (s *AppService) GetProjectTree() []TreeNode {
 
 // --- 项目管理 ---
 
+// CloneProject 克隆远程仓库到本地目录，并添加到项目树
+func (s *AppService) CloneProject(platform, username, repoURL, parentDir, name string) error {
+	if repoURL == "" {
+		return fmt.Errorf("仓库地址不能为空")
+	}
+	if parentDir == "" {
+		return fmt.Errorf("目标目录不能为空")
+	}
+	if name == "" {
+		return fmt.Errorf("项目名称不能为空")
+	}
+
+	// 目标路径: parentDir/name
+	targetPath := parentDir + "/" + name
+
+	// 执行 git clone
+	_, err := s.gitClient.Clone(repoURL, targetPath)
+	if err != nil {
+		return fmt.Errorf("克隆失败: %w", err)
+	}
+
+	// 克隆成功后添加到项目树
+	return s.AddProject(platform, username, name, targetPath)
+}
+
 // AddProject 添加项目到指定平台/用户下
 func (s *AppService) AddProject(platform, username, name, path string) error {
 	p, ok := s.config.Platforms[platform]

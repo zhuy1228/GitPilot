@@ -53,6 +53,19 @@ export function AddUser(platform, username, token) {
 }
 
 /**
+ * CloneProject 克隆远程仓库到本地目录，并添加到项目树
+ * @param {string} platform
+ * @param {string} username
+ * @param {string} repoURL
+ * @param {string} parentDir
+ * @param {string} name
+ * @returns {$CancellablePromise<void>}
+ */
+export function CloneProject(platform, username, repoURL, parentDir, name) {
+    return $Call.ByID(2347019414, platform, username, repoURL, parentDir, name);
+}
+
+/**
  * CommitChanges 提交已暂存的更改
  * @param {string} path
  * @param {string} message
