@@ -29,6 +29,7 @@ import {
 import { Modal } from 'ant-design-vue'
 import { AppService } from '../../bindings/github.com/zhuy1228/GitPilot/internal/app'
 import FileTreeNode from './FileTreeNode.vue'
+import CommitFileTreeNode from './CommitFileTreeNode.vue'
 
 const props = defineProps({
   project: { type: Object, default: null }
@@ -1036,50 +1037,15 @@ watch(activeTab, (tab) => {
                       无变更文件
                     </div>
                     <template v-else>
-                      <div
+                      <CommitFileTreeNode
                         v-for="cf in commitFileTree"
                         :key="cf.type + '-' + (cf.path || cf.data?.filePath)"
-                      >
-                        <!-- 目录节点 -->
-                        <template v-if="cf.type === 'dir'">
-                          <div class="commit-file-item dir" @click="toggleCommitDir(cf.path)">
-                            <span :style="{ paddingLeft: '4px' }">
-                              <CaretDownOutlined v-if="!commitCollapsedDirs.has(cf.path)" class="section-arrow" />
-                              <CaretRightOutlined v-else class="section-arrow" />
-                            </span>
-                            <span class="commit-file-name">{{ cf.name }}</span>
-                            <span class="commit-file-count">{{ cf.fileCount }}</span>
-                          </div>
-                          <template v-if="!commitCollapsedDirs.has(cf.path)">
-                            <div
-                              v-for="child in cf.children"
-                              :key="child.data?.filePath || child.path"
-                            >
-                              <div
-                                v-if="child.type === 'file'"
-                                class="commit-file-item"
-                                :class="{ active: selectedCommitFile?.filePath === child.data.filePath }"
-                                @click="selectCommitFile(child.data)"
-                              >
-                                <FileOutlined style="flex-shrink: 0; margin-left: 20px;" />
-                                <span class="commit-file-name">{{ child.name }}</span>
-                                <a-tag :color="getCommitStatusColor(child.data.status)" size="small" style="margin-left: auto; flex-shrink: 0;">{{ getCommitStatusLabel(child.data.status) }}</a-tag>
-                              </div>
-                            </div>
-                          </template>
-                        </template>
-                        <!-- 文件节点 -->
-                        <div
-                          v-else
-                          class="commit-file-item"
-                          :class="{ active: selectedCommitFile?.filePath === cf.data.filePath }"
-                          @click="selectCommitFile(cf.data)"
-                        >
-                          <FileOutlined style="flex-shrink: 0;" />
-                          <span class="commit-file-name">{{ cf.name }}</span>
-                          <a-tag :color="getCommitStatusColor(cf.data.status)" size="small" style="margin-left: auto; flex-shrink: 0;">{{ getCommitStatusLabel(cf.data.status) }}</a-tag>
-                        </div>
-                      </div>
+                        :node="cf"
+                        :collapsed-dirs="commitCollapsedDirs"
+                        :selected-file="selectedCommitFile"
+                        @select-file="selectCommitFile($event)"
+                        @toggle-dir="toggleCommitDir($event)"
+                      />
                     </template>
                   </div>
                 </template>
