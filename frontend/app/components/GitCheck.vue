@@ -9,7 +9,7 @@ import {
   CloseCircleOutlined,
 } from '@ant-design/icons-vue'
 import { AppService } from '../../bindings/github.com/zhuy1228/GitPilot/internal/app'
-import { On } from '@wailsio/runtime'
+import { Events } from '@wailsio/runtime'
 
 const emit = defineEmits(['ready'])
 
@@ -29,7 +29,7 @@ let unsubscribe = null
 
 onMounted(async () => {
   // 监听安装进度事件
-  unsubscribe = On('git-install-progress', (event) => {
+  unsubscribe = Events.On('git-install-progress', (event) => {
     const data = event.data?.[0] || event.data
     if (data) {
       installPhase.value = data.phase
