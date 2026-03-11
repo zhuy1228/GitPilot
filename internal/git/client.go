@@ -348,6 +348,101 @@ func parseNameStatus(output string) []FileChange {
 	return changes
 }
 
+// CreateBranch 创建新分支
+func (g *GitClient) CreateBranch(path, name string) (string, error) {
+	return g.Run(path, "branch", name)
+}
+
+// DeleteBranch 删除本地分支 (-d 安全删除)
+func (g *GitClient) DeleteBranch(path, name string) (string, error) {
+	return g.Run(path, "branch", "-d", name)
+}
+
+// ForceDeleteBranch 强制删除本地分支 (-D)
+func (g *GitClient) ForceDeleteBranch(path, name string) (string, error) {
+	return g.Run(path, "branch", "-D", name)
+}
+
+// MergeBranch 合并指定分支到当前分支
+func (g *GitClient) MergeBranch(path, branch string) (string, error) {
+	return g.Run(path, "merge", branch)
+}
+
+// DeleteRemoteBranch 删除远程分支
+func (g *GitClient) DeleteRemoteBranch(path, branch string) (string, error) {
+	return g.Run(path, "push", "origin", "--delete", branch)
+}
+
+// RemoteBranchList 获取所有远程分支
+func (g *GitClient) RemoteBranchList(path string) (string, error) {
+	return g.Run(path, "branch", "-r", "--format=%(refname:short)")
+}
+
+// CheckoutNewBranch 从远程分支检出新本地分支
+func (g *GitClient) CheckoutNewBranch(path, localBranch, remoteBranch string) (string, error) {
+	return g.Run(path, "checkout", "-b", localBranch, remoteBranch)
+}
+
+// StashSave 保存当前工作区变更到贮藏
+func (g *GitClient) StashSave(path, message string) (string, error) {
+	if message != "" {
+		return g.Run(path, "stash", "push", "-m", message)
+	}
+	return g.Run(path, "stash", "push")
+}
+
+// StashList 获取贮藏列表
+func (g *GitClient) StashList(path string) (string, error) {
+	return g.Run(path, "stash", "list", "--format=%gd\t%s\t%at")
+}
+
+// StashApply 应用贮藏（不删除）
+func (g *GitClient) StashApply(path string, index int) (string, error) {
+	return g.Run(path, "stash", "apply", fmt.Sprintf("stash@{%d}", index))
+}
+
+// StashPop 应用贮藏并删除
+func (g *GitClient) StashPop(path string, index int) (string, error) {
+	return g.Run(path, "stash", "pop", fmt.Sprintf("stash@{%d}", index))
+}
+
+// StashDrop 删除贮藏
+func (g *GitClient) StashDrop(path string, index int) (string, error) {
+	return g.Run(path, "stash", "drop", fmt.Sprintf("stash@{%d}", index))
+}
+
+// GetGitGlobalConfig 获取 git 全局配置
+func (g *GitClient) GetGitGlobalConfig(key string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), g.Timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "config", "--global", "--get", key)
+	hideWindow(cmd)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		return "", nil // key 不存在不算错误
+	}
+	return strings.TrimSpace(stdout.String()), nil
+}
+
+// SetGitGlobalConfig 设置 git 全局配置
+func (g *GitClient) SetGitGlobalConfig(key, value string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), g.Timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "config", "--global", key, value)
+	hideWindow(cmd)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("git config error: %v, stderr: %s", err, stderr.String())
+	}
+	return strings.TrimSpace(stdout.String()), nil
+}
+
 // StatusText 返回变更状态的中文描述
 func (fc FileChange) StatusText() string {
 	switch {

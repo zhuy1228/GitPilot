@@ -12,8 +12,10 @@ export {
     CommitFileInfo,
     CommitLog,
     FileInfo,
+    GitConfig,
     PlatformInfo,
     ProjectStatus,
+    StashInfo,
     TagInfo,
     TreeNode,
     UserInfo

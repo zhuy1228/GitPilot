@@ -820,3 +820,232 @@ func (s *AppService) PushTag(path, name string) error {
 	_, err := s.gitClient.PushTag(path, name)
 	return err
 }
+
+// --- 分支管理 ---
+
+// CreateBranch 创建新分支
+func (s *AppService) CreateBranch(path, name string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("项目路径不存在: %s", path)
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("分支名不能为空")
+	}
+	_, err := s.gitClient.CreateBranch(path, name)
+	return err
+}
+
+// DeleteBranch 删除本地分支
+func (s *AppService) DeleteBranch(path, name string, force bool) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("项目路径不存在: %s", path)
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("分支名不能为空")
+	}
+	var err error
+	if force {
+		_, err = s.gitClient.ForceDeleteBranch(path, name)
+	} else {
+		_, err = s.gitClient.DeleteBranch(path, name)
+	}
+	return err
+}
+
+// MergeBranch 合并指定分支到当前分支
+func (s *AppService) MergeBranch(path, branch string) (string, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return "", fmt.Errorf("项目路径不存在: %s", path)
+	}
+	branch = strings.TrimSpace(branch)
+	if branch == "" {
+		return "", fmt.Errorf("分支名不能为空")
+	}
+	return s.gitClient.MergeBranch(path, branch)
+}
+
+// --- 远程分支管理 ---
+
+// GetRemoteBranches 获取远程分支列表
+func (s *AppService) GetRemoteBranches(path string) ([]BranchInfo, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, fmt.Errorf("项目路径不存在: %s", path)
+	}
+	out, err := s.gitClient.RemoteBranchList(path)
+	if err != nil {
+		return nil, fmt.Errorf("获取远程分支列表失败: %w", err)
+	}
+	var branches []BranchInfo
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		name := strings.TrimSpace(line)
+		if name == "" || strings.Contains(name, "HEAD") {
+			continue
+		}
+		branches = append(branches, BranchInfo{Name: name, Current: false})
+	}
+	return branches, nil
+}
+
+// CheckoutRemoteBranch 检出远程分支到本地
+func (s *AppService) CheckoutRemoteBranch(path, remoteBranch string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("项目路径不存在: %s", path)
+	}
+	remoteBranch = strings.TrimSpace(remoteBranch)
+	if remoteBranch == "" {
+		return fmt.Errorf("远程分支名不能为空")
+	}
+	// origin/feature -> feature
+	localBranch := remoteBranch
+	if idx := strings.Index(remoteBranch, "/"); idx != -1 {
+		localBranch = remoteBranch[idx+1:]
+	}
+	_, err := s.gitClient.CheckoutNewBranch(path, localBranch, remoteBranch)
+	return err
+}
+
+// DeleteRemoteBranch 删除远程分支
+func (s *AppService) DeleteRemoteBranch(path, branch string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("项目路径不存在: %s", path)
+	}
+	branch = strings.TrimSpace(branch)
+	if branch == "" {
+		return fmt.Errorf("分支名不能为空")
+	}
+	// origin/feature -> feature
+	localName := branch
+	if idx := strings.Index(branch, "/"); idx != -1 {
+		localName = branch[idx+1:]
+	}
+	_, err := s.gitClient.DeleteRemoteBranch(path, localName)
+	return err
+}
+
+// --- Stash 贮藏管理 ---
+
+// StashInfo 贮藏信息
+type StashInfo struct {
+	Index     int    `json:"index"`
+	Ref       string `json:"ref"`
+	Message   string `json:"message"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+// StashSave 保存当前变更到贮藏
+func (s *AppService) StashSave(path, message string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("项目路径不存在: %s", path)
+	}
+	_, err := s.gitClient.StashSave(path, message)
+	return err
+}
+
+// GetStashList 获取贮藏列表
+func (s *AppService) GetStashList(path string) ([]StashInfo, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, fmt.Errorf("项目路径不存在: %s", path)
+	}
+	out, err := s.gitClient.StashList(path)
+	if err != nil {
+		return nil, fmt.Errorf("获取贮藏列表失败: %w", err)
+	}
+	var stashes []StashInfo
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "\t", 3)
+		if len(parts) < 2 {
+			continue
+		}
+		ref := parts[0]
+		message := parts[1]
+		var ts int64
+		if len(parts) >= 3 {
+			fmt.Sscanf(parts[2], "%d", &ts)
+		}
+		var index int
+		fmt.Sscanf(ref, "stash@{%d}", &index)
+		stashes = append(stashes, StashInfo{
+			Index:     index,
+			Ref:       ref,
+			Message:   message,
+			Timestamp: ts,
+		})
+	}
+	return stashes, nil
+}
+
+// StashApply 应用贮藏（不删除）
+func (s *AppService) StashApply(path string, index int) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("项目路径不存在: %s", path)
+	}
+	_, err := s.gitClient.StashApply(path, index)
+	return err
+}
+
+// StashPop 应用贮藏并删除
+func (s *AppService) StashPop(path string, index int) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("项目路径不存在: %s", path)
+	}
+	_, err := s.gitClient.StashPop(path, index)
+	return err
+}
+
+// StashDrop 删除贮藏
+func (s *AppService) StashDrop(path string, index int) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("项目路径不存在: %s", path)
+	}
+	_, err := s.gitClient.StashDrop(path, index)
+	return err
+}
+
+// --- 设置管理 ---
+
+// GitConfig Git 全局配置
+type GitConfig struct {
+	UserName  string `json:"userName"`
+	UserEmail string `json:"userEmail"`
+}
+
+// GetGitGlobalConfig 获取 git 全局配置
+func (s *AppService) GetGitGlobalConfig() (*GitConfig, error) {
+	name, _ := s.gitClient.GetGitGlobalConfig("user.name")
+	email, _ := s.gitClient.GetGitGlobalConfig("user.email")
+	return &GitConfig{
+		UserName:  name,
+		UserEmail: email,
+	}, nil
+}
+
+// SetGitGlobalConfig 设置 git 全局配置
+func (s *AppService) SetGitGlobalConfig(name, email string) error {
+	if name != "" {
+		if _, err := s.gitClient.SetGitGlobalConfig("user.name", name); err != nil {
+			return fmt.Errorf("设置 user.name 失败: %w", err)
+		}
+	}
+	if email != "" {
+		if _, err := s.gitClient.SetGitGlobalConfig("user.email", email); err != nil {
+			return fmt.Errorf("设置 user.email 失败: %w", err)
+		}
+	}
+	return nil
+}
+
+// GetAppSettings 获取应用设置
+func (s *AppService) GetAppSettings() *config.Settings {
+	return &s.config.Settings
+}
+
+// UpdateAppSettings 更新应用设置
+func (s *AppService) UpdateAppSettings(logLevel string) error {
+	s.config.Settings.LogLevel = logLevel
+	return config.SaveConfig(s.config)
+}

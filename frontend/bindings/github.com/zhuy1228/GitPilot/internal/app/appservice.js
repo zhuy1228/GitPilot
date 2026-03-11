@@ -14,6 +14,9 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as application$0 from "../../../../wailsapp/wails/v3/pkg/application/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as config$0 from "../../config/models.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -53,6 +56,16 @@ export function AddUser(platform, username, token) {
 }
 
 /**
+ * CheckoutRemoteBranch 检出远程分支到本地
+ * @param {string} path
+ * @param {string} remoteBranch
+ * @returns {$CancellablePromise<void>}
+ */
+export function CheckoutRemoteBranch(path, remoteBranch) {
+    return $Call.ByID(3682237522, path, remoteBranch);
+}
+
+/**
  * CloneProject 克隆远程仓库到本地目录，并添加到项目树
  * @param {string} platform
  * @param {string} username
@@ -76,6 +89,16 @@ export function CommitChanges(path, message) {
 }
 
 /**
+ * CreateBranch 创建新分支
+ * @param {string} path
+ * @param {string} name
+ * @returns {$CancellablePromise<void>}
+ */
+export function CreateBranch(path, name) {
+    return $Call.ByID(1422152924, path, name);
+}
+
+/**
  * CreateTag 创建标签
  * @param {string} path
  * @param {string} name
@@ -84,6 +107,27 @@ export function CommitChanges(path, message) {
  */
 export function CreateTag(path, name, message) {
     return $Call.ByID(4209616956, path, name, message);
+}
+
+/**
+ * DeleteBranch 删除本地分支
+ * @param {string} path
+ * @param {string} name
+ * @param {boolean} force
+ * @returns {$CancellablePromise<void>}
+ */
+export function DeleteBranch(path, name, force) {
+    return $Call.ByID(580272035, path, name, force);
+}
+
+/**
+ * DeleteRemoteBranch 删除远程分支
+ * @param {string} path
+ * @param {string} branch
+ * @returns {$CancellablePromise<void>}
+ */
+export function DeleteRemoteBranch(path, branch) {
+    return $Call.ByID(2626609049, path, branch);
 }
 
 /**
@@ -116,13 +160,23 @@ export function FetchProject(path) {
 }
 
 /**
+ * GetAppSettings 获取应用设置
+ * @returns {$CancellablePromise<config$0.Settings | null>}
+ */
+export function GetAppSettings() {
+    return $Call.ByID(428589026).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
  * GetBranches 获取所有本地分支
  * @param {string} path
  * @returns {$CancellablePromise<$models.BranchInfo[]>}
  */
 export function GetBranches(path) {
     return $Call.ByID(1686190192, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType3($result);
     }));
 }
 
@@ -155,7 +209,7 @@ export function GetCommitFileDiff(path, hash, filePath) {
  */
 export function GetCommitFiles(path, hash) {
     return $Call.ByID(2420707876, path, hash).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType3($result);
+        return $$createType5($result);
     }));
 }
 
@@ -167,7 +221,7 @@ export function GetCommitFiles(path, hash) {
  */
 export function GetCommitLog(path, count) {
     return $Call.ByID(1281870789, path, count).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType5($result);
+        return $$createType7($result);
     }));
 }
 
@@ -202,13 +256,23 @@ export function GetFileDiffStaged(projectPath, filePath) {
 }
 
 /**
+ * GetGitGlobalConfig 获取 git 全局配置
+ * @returns {$CancellablePromise<$models.GitConfig | null>}
+ */
+export function GetGitGlobalConfig() {
+    return $Call.ByID(154811497).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType9($result);
+    }));
+}
+
+/**
  * GetPlatformInfo 获取平台信息
  * @param {string} name
  * @returns {$CancellablePromise<$models.PlatformInfo | null>}
  */
 export function GetPlatformInfo(name) {
     return $Call.ByID(2668095547, name).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType7($result);
+        return $$createType11($result);
     }));
 }
 
@@ -219,7 +283,7 @@ export function GetPlatformInfo(name) {
  */
 export function GetProjectChangedFiles(path) {
     return $Call.ByID(2302591462, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType9($result);
+        return $$createType13($result);
     }));
 }
 
@@ -230,7 +294,7 @@ export function GetProjectChangedFiles(path) {
  */
 export function GetProjectStatus(path) {
     return $Call.ByID(3451089027, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType11($result);
+        return $$createType15($result);
     }));
 }
 
@@ -240,7 +304,29 @@ export function GetProjectStatus(path) {
  */
 export function GetProjectTree() {
     return $Call.ByID(651189689).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType13($result);
+        return $$createType17($result);
+    }));
+}
+
+/**
+ * GetRemoteBranches 获取远程分支列表
+ * @param {string} path
+ * @returns {$CancellablePromise<$models.BranchInfo[]>}
+ */
+export function GetRemoteBranches(path) {
+    return $Call.ByID(994796370, path).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType3($result);
+    }));
+}
+
+/**
+ * GetStashList 获取贮藏列表
+ * @param {string} path
+ * @returns {$CancellablePromise<$models.StashInfo[]>}
+ */
+export function GetStashList(path) {
+    return $Call.ByID(1948257945, path).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType19($result);
     }));
 }
 
@@ -251,7 +337,7 @@ export function GetProjectTree() {
  */
 export function GetTags(path) {
     return $Call.ByID(3979169621, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType15($result);
+        return $$createType21($result);
     }));
 }
 
@@ -263,8 +349,18 @@ export function GetTags(path) {
  */
 export function GetUserInfo(platform, username) {
     return $Call.ByID(2674655707, platform, username).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType17($result);
+        return $$createType23($result);
     }));
+}
+
+/**
+ * MergeBranch 合并指定分支到当前分支
+ * @param {string} path
+ * @param {string} branch
+ * @returns {$CancellablePromise<string>}
+ */
+export function MergeBranch(path, branch) {
+    return $Call.ByID(278161076, path, branch);
 }
 
 /**
@@ -364,6 +460,16 @@ export function SetApplication(app) {
 }
 
 /**
+ * SetGitGlobalConfig 设置 git 全局配置
+ * @param {string} name
+ * @param {string} email
+ * @returns {$CancellablePromise<void>}
+ */
+export function SetGitGlobalConfig(name, email) {
+    return $Call.ByID(3875064981, name, email);
+}
+
+/**
  * StageAll 暂存所有变更文件
  * @param {string} path
  * @returns {$CancellablePromise<void>}
@@ -380,6 +486,46 @@ export function StageAll(path) {
  */
 export function StageFiles(path, files) {
     return $Call.ByID(4064506881, path, files);
+}
+
+/**
+ * StashApply 应用贮藏（不删除）
+ * @param {string} path
+ * @param {number} index
+ * @returns {$CancellablePromise<void>}
+ */
+export function StashApply(path, index) {
+    return $Call.ByID(721583959, path, index);
+}
+
+/**
+ * StashDrop 删除贮藏
+ * @param {string} path
+ * @param {number} index
+ * @returns {$CancellablePromise<void>}
+ */
+export function StashDrop(path, index) {
+    return $Call.ByID(3821556536, path, index);
+}
+
+/**
+ * StashPop 应用贮藏并删除
+ * @param {string} path
+ * @param {number} index
+ * @returns {$CancellablePromise<void>}
+ */
+export function StashPop(path, index) {
+    return $Call.ByID(4117964460, path, index);
+}
+
+/**
+ * StashSave 保存当前变更到贮藏
+ * @param {string} path
+ * @param {string} message
+ * @returns {$CancellablePromise<void>}
+ */
+export function StashSave(path, message) {
+    return $Call.ByID(1178263140, path, message);
 }
 
 /**
@@ -412,6 +558,15 @@ export function UnstageFiles(path, files) {
 }
 
 /**
+ * UpdateAppSettings 更新应用设置
+ * @param {string} logLevel
+ * @returns {$CancellablePromise<void>}
+ */
+export function UpdateAppSettings(logLevel) {
+    return $Call.ByID(718820989, logLevel);
+}
+
+/**
  * UpdatePlatform 修改平台信息（base_url）
  * @param {string} name
  * @param {string} baseURL
@@ -434,21 +589,27 @@ export function UpdateUser(platform, oldUsername, newUsername, token) {
 }
 
 // Private type creation functions
-const $$createType0 = $models.BranchInfo.createFrom;
-const $$createType1 = $Create.Array($$createType0);
-const $$createType2 = $models.CommitFileInfo.createFrom;
+const $$createType0 = config$0.Settings.createFrom;
+const $$createType1 = $Create.Nullable($$createType0);
+const $$createType2 = $models.BranchInfo.createFrom;
 const $$createType3 = $Create.Array($$createType2);
-const $$createType4 = $models.CommitLog.createFrom;
+const $$createType4 = $models.CommitFileInfo.createFrom;
 const $$createType5 = $Create.Array($$createType4);
-const $$createType6 = $models.PlatformInfo.createFrom;
-const $$createType7 = $Create.Nullable($$createType6);
-const $$createType8 = $models.FileInfo.createFrom;
-const $$createType9 = $Create.Array($$createType8);
-const $$createType10 = $models.ProjectStatus.createFrom;
+const $$createType6 = $models.CommitLog.createFrom;
+const $$createType7 = $Create.Array($$createType6);
+const $$createType8 = $models.GitConfig.createFrom;
+const $$createType9 = $Create.Nullable($$createType8);
+const $$createType10 = $models.PlatformInfo.createFrom;
 const $$createType11 = $Create.Nullable($$createType10);
-const $$createType12 = $models.TreeNode.createFrom;
+const $$createType12 = $models.FileInfo.createFrom;
 const $$createType13 = $Create.Array($$createType12);
-const $$createType14 = $models.TagInfo.createFrom;
-const $$createType15 = $Create.Array($$createType14);
-const $$createType16 = $models.UserInfo.createFrom;
-const $$createType17 = $Create.Nullable($$createType16);
+const $$createType14 = $models.ProjectStatus.createFrom;
+const $$createType15 = $Create.Nullable($$createType14);
+const $$createType16 = $models.TreeNode.createFrom;
+const $$createType17 = $Create.Array($$createType16);
+const $$createType18 = $models.StashInfo.createFrom;
+const $$createType19 = $Create.Array($$createType18);
+const $$createType20 = $models.TagInfo.createFrom;
+const $$createType21 = $Create.Array($$createType20);
+const $$createType22 = $models.UserInfo.createFrom;
+const $$createType23 = $Create.Nullable($$createType22);

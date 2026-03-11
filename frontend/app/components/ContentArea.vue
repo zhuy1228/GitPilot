@@ -25,8 +25,14 @@ import {
   CloudUploadOutlined as PushTagIcon,
   DeleteOutlined,
   SendOutlined,
+  MergeCellsOutlined,
+  InboxOutlined,
+  SettingOutlined,
+  GlobalOutlined,
+  SaveOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons-vue'
-import { Modal } from 'ant-design-vue'
+import { Modal, message } from 'ant-design-vue'
 import { AppService } from '../../bindings/github.com/zhuy1228/GitPilot/internal/app'
 import FileTreeNode from './FileTreeNode.vue'
 import CommitFileTreeNode from './CommitFileTreeNode.vue'
@@ -75,6 +81,24 @@ const showCreateTag = ref(false)
 const newTagName = ref('')
 const newTagMessage = ref('')
 const createTagLoading = ref(false)
+
+// ---- 分支管理 ----
+const newBranchName = ref('')
+const createBranchLoading = ref(false)
+const remoteBranches = ref([])
+
+// ---- Stash 贮藏管理 ----
+const stashList = ref([])
+const stashLoading = ref(false)
+const showStashSave = ref(false)
+const stashMessage = ref('')
+const stashSaveLoading = ref(false)
+const showStashPanel = ref(false)
+
+// ---- 设置 ----
+const showSettings = ref(false)
+const settingsLoading = ref(false)
+const gitConfig = ref({ userName: '', userEmail: '' })
 
 // ---- 文件列表拖拽调整宽度 ----
 const fileListWidth = ref(300)
@@ -511,6 +535,8 @@ async function loadBranches() {
   } catch (e) {
     console.error('获取分支失败:', e)
   }
+  loadRemoteBranches()
+  loadStashList()
 }
 
 async function switchBranch(branchName) {
@@ -524,6 +550,247 @@ async function switchBranch(branchName) {
     console.error('切换分支失败:', e)
   } finally {
     branchLoading.value = false
+  }
+}
+
+async function createBranch() {
+  if (!props.project?.path || !newBranchName.value.trim()) return
+  createBranchLoading.value = true
+  try {
+    await AppService.CreateBranch(props.project.path, newBranchName.value.trim())
+    newBranchName.value = ''
+    await loadBranches()
+    message.success('分支创建成功')
+  } catch (e) {
+    console.error('创建分支失败:', e)
+    Modal.error({ title: '创建分支失败', content: String(e) })
+  } finally {
+    createBranchLoading.value = false
+  }
+}
+
+async function deleteBranch(branchName, force = false) {
+  if (!props.project?.path) return
+  Modal.confirm({
+    title: '确认删除分支',
+    icon: h(ExclamationCircleOutlined),
+    content: h('div', [
+      h('p', `确定要删除分支吗？`),
+      h('p', { style: 'font-family: monospace; color: #89b4fa; font-size: 15px;' }, branchName),
+    ]),
+    okText: '删除',
+    cancelText: '取消',
+    okButtonProps: { danger: true },
+    async onOk() {
+      try {
+        await AppService.DeleteBranch(props.project.path, branchName, force)
+        await loadBranches()
+        message.success(`分支 ${branchName} 已删除`)
+      } catch (e) {
+        // 如果安全删除失败，提示是否强制删除
+        if (!force && String(e).includes('not fully merged')) {
+          Modal.confirm({
+            title: '分支未完全合并',
+            icon: h(ExclamationCircleOutlined),
+            content: h('div', [
+              h('p', `分支 ${branchName} 尚未完全合并到当前分支。`),
+              h('p', { style: 'color: #f38ba8;' }, '是否强制删除？'),
+            ]),
+            okText: '强制删除',
+            cancelText: '取消',
+            okButtonProps: { danger: true },
+            async onOk() {
+              await deleteBranch(branchName, true)
+            },
+          })
+        } else {
+          Modal.error({ title: '删除分支失败', content: String(e) })
+        }
+      }
+    },
+  })
+}
+
+async function mergeBranch(branchName) {
+  if (!props.project?.path) return
+  Modal.confirm({
+    title: '确认合并分支',
+    icon: h(MergeCellsOutlined),
+    content: h('div', [
+      h('p', [
+        '将 ',
+        h('span', { style: 'font-family: monospace; color: #89b4fa;' }, branchName),
+        ' 合并到 ',
+        h('span', { style: 'font-family: monospace; color: #a6e3a1;' }, status.value?.branch || '当前分支'),
+      ]),
+    ]),
+    okText: '合并',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        const result = await AppService.MergeBranch(props.project.path, branchName)
+        message.success('合并成功')
+        await loadStatus()
+      } catch (e) {
+        console.error('合并分支失败:', e)
+        Modal.error({ title: '合并失败', content: String(e) })
+      }
+    },
+  })
+}
+
+// ---- 远程分支 ----
+async function loadRemoteBranches() {
+  if (!props.project?.path) return
+  try {
+    const list = await AppService.GetRemoteBranches(props.project.path)
+    remoteBranches.value = Array.isArray(list) ? list : []
+  } catch (e) {
+    console.error('获取远程分支失败:', e)
+  }
+}
+
+async function checkoutRemoteBranch(remoteBranch) {
+  if (!props.project?.path) return
+  showBranchDropdown.value = false
+  try {
+    await AppService.CheckoutRemoteBranch(props.project.path, remoteBranch)
+    message.success('检出成功')
+    await loadStatus()
+  } catch (e) {
+    console.error('检出远程分支失败:', e)
+    Modal.error({ title: '检出失败', content: String(e) })
+  }
+}
+
+async function deleteRemoteBranch(remoteBranch) {
+  if (!props.project?.path) return
+  Modal.confirm({
+    title: '确认删除远程分支',
+    icon: h(ExclamationCircleOutlined),
+    content: h('div', [
+      h('p', '确定要删除远程分支吗？此操作不可逆！'),
+      h('p', { style: 'font-family: monospace; color: #f38ba8; font-size: 15px;' }, remoteBranch),
+    ]),
+    okText: '删除',
+    cancelText: '取消',
+    okButtonProps: { danger: true },
+    async onOk() {
+      try {
+        await AppService.DeleteRemoteBranch(props.project.path, remoteBranch)
+        await loadRemoteBranches()
+        message.success(`远程分支 ${remoteBranch} 已删除`)
+      } catch (e) {
+        Modal.error({ title: '删除远程分支失败', content: String(e) })
+      }
+    },
+  })
+}
+
+// ---- Stash 贮藏管理 ----
+async function loadStashList() {
+  if (!props.project?.path) return
+  stashLoading.value = true
+  try {
+    const list = await AppService.GetStashList(props.project.path)
+    stashList.value = Array.isArray(list) ? list : []
+  } catch (e) {
+    console.error('获取贮藏列表失败:', e)
+    stashList.value = []
+  } finally {
+    stashLoading.value = false
+  }
+}
+
+async function stashSave() {
+  if (!props.project?.path) return
+  stashSaveLoading.value = true
+  try {
+    await AppService.StashSave(props.project.path, stashMessage.value.trim())
+    stashMessage.value = ''
+    showStashSave.value = false
+    message.success('已贮藏当前变更')
+    await refreshFiles()
+    await loadStashList()
+  } catch (e) {
+    console.error('贮藏失败:', e)
+    Modal.error({ title: '贮藏失败', content: String(e) })
+  } finally {
+    stashSaveLoading.value = false
+  }
+}
+
+async function stashApply(index) {
+  if (!props.project?.path) return
+  try {
+    await AppService.StashApply(props.project.path, index)
+    message.success('已应用贮藏')
+    await refreshFiles()
+  } catch (e) {
+    Modal.error({ title: '应用贮藏失败', content: String(e) })
+  }
+}
+
+async function stashPop(index) {
+  if (!props.project?.path) return
+  try {
+    await AppService.StashPop(props.project.path, index)
+    message.success('已应用并删除贮藏')
+    await refreshFiles()
+    await loadStashList()
+  } catch (e) {
+    Modal.error({ title: '应用贮藏失败', content: String(e) })
+  }
+}
+
+async function stashDrop(index) {
+  if (!props.project?.path) return
+  Modal.confirm({
+    title: '确认删除贮藏',
+    icon: h(ExclamationCircleOutlined),
+    content: `确定要删除 stash@{${index}} 吗？`,
+    okText: '删除',
+    cancelText: '取消',
+    okButtonProps: { danger: true },
+    async onOk() {
+      try {
+        await AppService.StashDrop(props.project.path, index)
+        message.success('已删除贮藏')
+        await loadStashList()
+      } catch (e) {
+        Modal.error({ title: '删除贮藏失败', content: String(e) })
+      }
+    },
+  })
+}
+
+// ---- 设置 ----
+async function openSettings() {
+  showSettings.value = true
+  settingsLoading.value = true
+  try {
+    const config = await AppService.GetGitGlobalConfig()
+    gitConfig.value = {
+      userName: config?.userName || '',
+      userEmail: config?.userEmail || '',
+    }
+  } catch (e) {
+    console.error('获取 Git 配置失败:', e)
+  } finally {
+    settingsLoading.value = false
+  }
+}
+
+async function saveSettings() {
+  settingsLoading.value = true
+  try {
+    await AppService.SetGitGlobalConfig(gitConfig.value.userName, gitConfig.value.userEmail)
+    message.success('设置已保存')
+    showSettings.value = false
+  } catch (e) {
+    Modal.error({ title: '保存设置失败', content: String(e) })
+  } finally {
+    settingsLoading.value = false
   }
 }
 
@@ -783,23 +1050,76 @@ watch(activeTab, (tab) => {
                 </a-tag>
                 <template #overlay>
                   <div class="branch-dropdown">
-                    <div class="branch-dropdown-title">切换分支</div>
+                    <!-- 创建新分支 -->
+                    <div class="branch-create-box">
+                      <a-input
+                        v-model:value="newBranchName"
+                        placeholder="新分支名称"
+                        size="small"
+                        style="flex:1"
+                        @pressEnter="createBranch"
+                      />
+                      <a-button
+                        type="primary"
+                        size="small"
+                        :loading="createBranchLoading"
+                        :disabled="!newBranchName.trim()"
+                        @click="createBranch"
+                      >
+                        <template #icon><PlusOutlined /></template>
+                      </a-button>
+                    </div>
+                    <!-- 本地分支 -->
+                    <div class="branch-dropdown-title">本地分支</div>
                     <div class="branch-dropdown-list">
                       <div
                         v-for="b in branches"
                         :key="b.name"
                         class="branch-dropdown-item"
                         :class="{ active: b.current }"
-                        @click="switchBranch(b.name)"
                       >
-                        <BranchesOutlined style="font-size: 12px; margin-right: 6px;" />
-                        {{ b.name }}
-                        <span v-if="b.current" style="margin-left: auto; color: var(--success, #a6e3a1);">✓</span>
+                        <div class="branch-item-main" @click="switchBranch(b.name)">
+                          <BranchesOutlined style="font-size: 12px; margin-right: 6px;" />
+                          <span class="branch-item-name">{{ b.name }}</span>
+                          <span v-if="b.current" style="margin-left: auto; color: var(--success, #a6e3a1);">✓</span>
+                        </div>
+                        <div v-if="!b.current" class="branch-item-actions" @click.stop>
+                          <a-tooltip title="合并到当前分支">
+                            <span class="branch-action-btn" @click="mergeBranch(b.name)"><MergeCellsOutlined /></span>
+                          </a-tooltip>
+                          <a-tooltip title="删除分支">
+                            <span class="branch-action-btn danger" @click="deleteBranch(b.name)"><DeleteOutlined /></span>
+                          </a-tooltip>
+                        </div>
                       </div>
                       <div v-if="!branches.length" style="padding: 12px; text-align: center; color: var(--text-muted);">
                         无分支数据
                       </div>
                     </div>
+                    <!-- 远程分支 -->
+                    <template v-if="remoteBranches.length">
+                      <div class="branch-dropdown-title">远程分支</div>
+                      <div class="branch-dropdown-list" style="max-height: 150px;">
+                        <div
+                          v-for="rb in remoteBranches"
+                          :key="rb.name"
+                          class="branch-dropdown-item remote"
+                        >
+                          <div class="branch-item-main" @click="checkoutRemoteBranch(rb.name)">
+                            <GlobalOutlined style="font-size: 12px; margin-right: 6px; color: var(--text-muted);" />
+                            <span class="branch-item-name">{{ rb.name }}</span>
+                          </div>
+                          <div class="branch-item-actions" @click.stop>
+                            <a-tooltip title="检出到本地">
+                              <span class="branch-action-btn" @click="checkoutRemoteBranch(rb.name)"><DownloadOutlined /></span>
+                            </a-tooltip>
+                            <a-tooltip title="删除远程分支">
+                              <span class="branch-action-btn danger" @click="deleteRemoteBranch(rb.name)"><DeleteOutlined /></span>
+                            </a-tooltip>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
                   </div>
                 </template>
               </a-dropdown>
@@ -821,6 +1141,9 @@ watch(activeTab, (tab) => {
             </a-button>
             <a-button size="small" :disabled="loadingBase" @click="loadStatus">
               <template #icon><ReloadOutlined /></template>
+            </a-button>
+            <a-button size="small" @click="openSettings">
+              <template #icon><SettingOutlined /></template>
             </a-button>
           </a-space>
         </div>
@@ -864,6 +1187,53 @@ watch(activeTab, (tab) => {
                 >
                   Commit
                 </a-button>
+                <a-dropdown :trigger="['click']">
+                  <a-button size="small" :disabled="!unstagedFiles.length && !stagedFiles.length" title="贮藏">
+                    <template #icon><InboxOutlined /></template>
+                  </a-button>
+                  <template #overlay>
+                    <div class="stash-dropdown">
+                      <div class="stash-save-section">
+                        <a-input
+                          v-model:value="stashMessage"
+                          placeholder="贮藏描述 (可选)"
+                          size="small"
+                          style="flex:1"
+                          @pressEnter="stashSave"
+                        />
+                        <a-button type="primary" size="small" :loading="stashSaveLoading" @click="stashSave">
+                          <template #icon><SaveOutlined /></template>
+                          Stash
+                        </a-button>
+                      </div>
+                      <div class="stash-list-title" v-if="stashList.length">
+                        <InboxOutlined /> 贮藏列表 ({{ stashList.length }})
+                      </div>
+                      <div class="stash-list" v-if="stashList.length">
+                        <div v-for="s in stashList" :key="s.index" class="stash-item">
+                          <div class="stash-item-main">
+                            <span class="stash-ref">{{ s.ref }}</span>
+                            <span class="stash-msg">{{ s.message }}</span>
+                          </div>
+                          <div class="stash-item-actions">
+                            <a-tooltip title="应用并删除">
+                              <span class="stash-action-btn" @click="stashPop(s.index)"><CheckCircleOutlined /></span>
+                            </a-tooltip>
+                            <a-tooltip title="应用（保留）">
+                              <span class="stash-action-btn" @click="stashApply(s.index)"><DownloadOutlined /></span>
+                            </a-tooltip>
+                            <a-tooltip title="删除">
+                              <span class="stash-action-btn danger" @click="stashDrop(s.index)"><DeleteOutlined /></span>
+                            </a-tooltip>
+                          </div>
+                        </div>
+                      </div>
+                      <div v-else style="padding: 12px; text-align: center; color: var(--text-muted); font-size: 12px;">
+                        暂无贮藏
+                      </div>
+                    </div>
+                  </template>
+                </a-dropdown>
               </div>
             </div>
 
@@ -1189,6 +1559,29 @@ watch(activeTab, (tab) => {
         </div>
       </template>
     </div>
+
+    <!-- 设置弹窗 -->
+    <a-modal
+      v-model:open="showSettings"
+      title="设置"
+      :width="480"
+      @ok="saveSettings"
+      ok-text="保存"
+      cancel-text="取消"
+      :ok-button-props="{ loading: settingsLoading }"
+    >
+      <a-form layout="vertical" :style="{ marginTop: '16px' }">
+        <div style="margin-bottom: 16px; font-weight: 600; color: var(--text-secondary); font-size: 13px;">
+          <UserOutlined /> Git 全局配置
+        </div>
+        <a-form-item label="user.name">
+          <a-input v-model:value="gitConfig.userName" placeholder="Your Name" />
+        </a-form-item>
+        <a-form-item label="user.email">
+          <a-input v-model:value="gitConfig.userEmail" placeholder="you@example.com" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -1459,34 +1852,39 @@ watch(activeTab, (tab) => {
   background: var(--bg-surface, #252536);
   border: 1px solid var(--border-color, #313244);
   border-radius: 6px;
-  min-width: 200px;
-  max-height: 300px;
+  min-width: 260px;
+  max-height: 400px;
   overflow: hidden;
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
 
-.branch-dropdown-title {
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
+.branch-create-box {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border-color);
+}
+
+.branch-dropdown-title {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
 
 .branch-dropdown-list {
-  max-height: 250px;
+  max-height: 200px;
   overflow-y: auto;
 }
 
 .branch-dropdown-item {
   display: flex;
   align-items: center;
-  padding: 7px 12px;
+  padding: 0 4px 0 0;
   font-size: 13px;
   color: var(--text-primary);
-  cursor: pointer;
   transition: background 0.12s;
 }
 
@@ -1497,6 +1895,159 @@ watch(activeTab, (tab) => {
 .branch-dropdown-item.active {
   background: var(--bg-active);
   color: var(--success, #a6e3a1);
+}
+
+.branch-item-main {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  padding: 7px 8px 7px 12px;
+  cursor: pointer;
+}
+
+.branch-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.branch-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  visibility: hidden;
+}
+
+.branch-dropdown-item:hover .branch-item-actions {
+  visibility: visible;
+}
+
+.branch-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.branch-action-btn:hover {
+  background: var(--bg-active, rgba(255,255,255,0.12));
+  color: var(--accent, #89b4fa);
+}
+
+.branch-action-btn.danger:hover {
+  background: rgba(243, 139, 168, 0.2);
+  color: var(--danger, #f38ba8);
+}
+
+/* Stash 下拉 */
+.stash-dropdown {
+  background: var(--bg-surface, #252536);
+  border: 1px solid var(--border-color, #313244);
+  border-radius: 6px;
+  min-width: 300px;
+  max-height: 360px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+.stash-save-section {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.stash-list-title {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stash-list {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.stash-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.04));
+  transition: background 0.12s;
+}
+
+.stash-item:hover {
+  background: var(--bg-hover);
+}
+
+.stash-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stash-ref {
+  font-family: 'Consolas', 'Courier New', monospace;
+  color: var(--accent, #89b4fa);
+  font-size: 11px;
+}
+
+.stash-msg {
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stash-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  visibility: hidden;
+}
+
+.stash-item:hover .stash-item-actions {
+  visibility: visible;
+}
+
+.stash-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.stash-action-btn:hover {
+  background: var(--bg-active, rgba(255,255,255,0.12));
+  color: var(--accent, #89b4fa);
+}
+
+.stash-action-btn.danger:hover {
+  background: rgba(243, 139, 168, 0.2);
+  color: var(--danger, #f38ba8);
 }
 
 /* Tab 切换 */

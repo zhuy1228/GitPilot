@@ -208,6 +208,44 @@ export class FileInfo {
 }
 
 /**
+ * GitConfig Git 全局配置
+ */
+export class GitConfig {
+    /**
+     * Creates a new GitConfig instance.
+     * @param {Partial<GitConfig>} [$$source = {}] - The source object to create the GitConfig.
+     */
+    constructor($$source = {}) {
+        if (!("userName" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["userName"] = "";
+        }
+        if (!("userEmail" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["userEmail"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new GitConfig instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {GitConfig}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new GitConfig(/** @type {Partial<GitConfig>} */($$parsedSource));
+    }
+}
+
+/**
  * PlatformInfo 平台信息
  */
 export class PlatformInfo {
@@ -291,6 +329,58 @@ export class ProjectStatus {
             $$parsedSource["changedFiles"] = $$createField2_0($$parsedSource["changedFiles"]);
         }
         return new ProjectStatus(/** @type {Partial<ProjectStatus>} */($$parsedSource));
+    }
+}
+
+/**
+ * StashInfo 贮藏信息
+ */
+export class StashInfo {
+    /**
+     * Creates a new StashInfo instance.
+     * @param {Partial<StashInfo>} [$$source = {}] - The source object to create the StashInfo.
+     */
+    constructor($$source = {}) {
+        if (!("index" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["index"] = 0;
+        }
+        if (!("ref" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["ref"] = "";
+        }
+        if (!("message" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["message"] = "";
+        }
+        if (!("timestamp" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["timestamp"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new StashInfo instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {StashInfo}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new StashInfo(/** @type {Partial<StashInfo>} */($$parsedSource));
     }
 }
 
