@@ -443,6 +443,79 @@ func (g *GitClient) SetGitGlobalConfig(key, value string) (string, error) {
 	return strings.TrimSpace(stdout.String()), nil
 }
 
+// --- 冲突处理 ---
+
+// ConflictFiles 获取冲突文件列表 (git diff --name-only --diff-filter=U)
+func (g *GitClient) ConflictFiles(path string) (string, error) {
+	return g.Run(path, "diff", "--name-only", "--diff-filter=U")
+}
+
+// GetConflictContent 获取冲突文件的完整内容（含冲突标记）
+func (g *GitClient) GetConflictContent(path, filePath string) (string, error) {
+	return g.Run(path, "show", ":0:"+filePath)
+}
+
+// MarkResolved 将冲突文件标记为已解决 (git add <file>)
+func (g *GitClient) MarkResolved(path string, files ...string) (string, error) {
+	args := append([]string{"add"}, files...)
+	return g.Run(path, args...)
+}
+
+// AbortMerge 中止合并 (git merge --abort)
+func (g *GitClient) AbortMerge(path string) (string, error) {
+	return g.Run(path, "merge", "--abort")
+}
+
+// MergeStatus 检查是否处于合并状态
+func (g *GitClient) MergeStatus(path string) bool {
+	// 检查 .git/MERGE_HEAD 文件是否存在
+	_, err := g.Run(path, "rev-parse", "--verify", "MERGE_HEAD")
+	return err == nil
+}
+
+// --- 提交搜索 ---
+
+// SearchCommits 搜索提交历史 (git log --grep / --author / --after / --before)
+func (g *GitClient) SearchCommits(path string, keyword, author string, maxCount int) (string, error) {
+	args := []string{"log"}
+	if maxCount > 0 {
+		args = append(args, fmt.Sprintf("--max-count=%d", maxCount))
+	}
+	if keyword != "" {
+		args = append(args, "--grep="+keyword, "-i")
+	}
+	if author != "" {
+		args = append(args, "--author="+author)
+	}
+	args = append(args, "--format=%H%n%h%n%an%n%ae%n%at%n%s%n---END---")
+	return g.Run(path, args...)
+}
+
+// --- 批量操作 ---
+
+// QuickStatus 快速获取分支名和是否有变更（轻量级）
+func (g *GitClient) QuickStatus(path string) (branch string, hasChanges bool, unpushed int, err error) {
+	branchOut, err := g.Branch(path)
+	if err != nil {
+		return "", false, 0, err
+	}
+	branch = strings.TrimSpace(branchOut)
+
+	// 检查是否有变更
+	statusOut, err := g.Run(path, "status", "--porcelain")
+	if err == nil {
+		hasChanges = strings.TrimSpace(statusOut) != ""
+	}
+
+	// 检查未推送提交数
+	unpushedOut, err := g.Run(path, "rev-list", "--count", "origin/"+branch+"..HEAD")
+	if err == nil {
+		fmt.Sscanf(strings.TrimSpace(unpushedOut), "%d", &unpushed)
+	}
+
+	return branch, hasChanges, unpushed, nil
+}
+
 // StatusText 返回变更状态的中文描述
 func (fc FileChange) StatusText() string {
 	switch {

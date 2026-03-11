@@ -8,12 +8,15 @@ export {
 };
 
 export {
+    BatchPullResult,
     BranchInfo,
     CommitFileInfo,
     CommitLog,
+    ConflictFileInfo,
     FileInfo,
     GitConfig,
     PlatformInfo,
+    ProjectOverview,
     ProjectStatus,
     StashInfo,
     TagInfo,

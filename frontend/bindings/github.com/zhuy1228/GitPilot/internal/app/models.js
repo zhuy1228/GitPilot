@@ -7,6 +7,58 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
+ * BatchPullResult 批量 pull 结果
+ */
+export class BatchPullResult {
+    /**
+     * Creates a new BatchPullResult instance.
+     * @param {Partial<BatchPullResult>} [$$source = {}] - The source object to create the BatchPullResult.
+     */
+    constructor($$source = {}) {
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (!("success" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["success"] = false;
+        }
+        if (!("message" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["message"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new BatchPullResult instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {BatchPullResult}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new BatchPullResult(/** @type {Partial<BatchPullResult>} */($$parsedSource));
+    }
+}
+
+/**
  * BranchInfo 分支信息
  */
 export class BranchInfo {
@@ -156,6 +208,37 @@ export class CommitLog {
 }
 
 /**
+ * ConflictFileInfo 冲突文件信息
+ */
+export class ConflictFileInfo {
+    /**
+     * Creates a new ConflictFileInfo instance.
+     * @param {Partial<ConflictFileInfo>} [$$source = {}] - The source object to create the ConflictFileInfo.
+     */
+    constructor($$source = {}) {
+        if (!("filePath" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["filePath"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ConflictFileInfo instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ConflictFileInfo}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ConflictFileInfo(/** @type {Partial<ConflictFileInfo>} */($$parsedSource));
+    }
+}
+
+/**
  * FileInfo 文件信息
  */
 export class FileInfo {
@@ -280,6 +363,79 @@ export class PlatformInfo {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new PlatformInfo(/** @type {Partial<PlatformInfo>} */($$parsedSource));
+    }
+}
+
+/**
+ * ProjectOverview 项目概览信息（轻量级）
+ */
+export class ProjectOverview {
+    /**
+     * Creates a new ProjectOverview instance.
+     * @param {Partial<ProjectOverview>} [$$source = {}] - The source object to create the ProjectOverview.
+     */
+    constructor($$source = {}) {
+        if (!("key" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["key"] = "";
+        }
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (!("branch" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["branch"] = "";
+        }
+        if (!("hasChanges" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["hasChanges"] = false;
+        }
+        if (!("unpushed" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["unpushed"] = 0;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["error"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProjectOverview instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ProjectOverview}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ProjectOverview(/** @type {Partial<ProjectOverview>} */($$parsedSource));
     }
 }
 

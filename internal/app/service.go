@@ -1049,3 +1049,224 @@ func (s *AppService) UpdateAppSettings(logLevel string) error {
 	s.config.Settings.LogLevel = logLevel
 	return config.SaveConfig(s.config)
 }
+
+// --- 冲突处理 ---
+
+// ConflictFileInfo 冲突文件信息
+type ConflictFileInfo struct {
+	FilePath string `json:"filePath"`
+}
+
+// GetConflictFiles 获取冲突文件列表
+func (s *AppService) GetConflictFiles(path string) ([]ConflictFileInfo, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, fmt.Errorf("项目路径不存在: %s", path)
+	}
+	out, err := s.gitClient.ConflictFiles(path)
+	if err != nil {
+		// 没有冲突文件时命令可能返回错误，返回空列表
+		return []ConflictFileInfo{}, nil
+	}
+	var files []ConflictFileInfo
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		files = append(files, ConflictFileInfo{FilePath: line})
+	}
+	return files, nil
+}
+
+// GetConflictFileContent 获取冲突文件内容（包含冲突标记）
+func (s *AppService) GetConflictFileContent(projectPath, filePath string) (string, error) {
+	fullPath := filepath.Join(projectPath, filePath)
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("读取冲突文件失败: %w", err)
+	}
+	return string(data), nil
+}
+
+// ResolveConflictFile 将冲突文件标记为已解决
+func (s *AppService) ResolveConflictFile(path string, files []string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("项目路径不存在: %s", path)
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("未指定文件")
+	}
+	_, err := s.gitClient.MarkResolved(path, files...)
+	return err
+}
+
+// SaveConflictFile 保存冲突文件内容（手动解决冲突后保存）
+func (s *AppService) SaveConflictFile(projectPath, filePath, content string) error {
+	fullPath := filepath.Join(projectPath, filePath)
+	return os.WriteFile(fullPath, []byte(content), 0o644)
+}
+
+// AbortMerge 中止合并
+func (s *AppService) AbortMerge(path string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("项目路径不存在: %s", path)
+	}
+	_, err := s.gitClient.AbortMerge(path)
+	return err
+}
+
+// IsMerging 检查是否处于合并状态
+func (s *AppService) IsMerging(path string) bool {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return false
+	}
+	return s.gitClient.MergeStatus(path)
+}
+
+// --- 提交搜索 ---
+
+// SearchCommitLog 搜索提交历史
+func (s *AppService) SearchCommitLog(path, keyword, author string, maxCount int) ([]CommitLog, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, fmt.Errorf("项目路径不存在: %s", path)
+	}
+	if maxCount <= 0 {
+		maxCount = 100
+	}
+	out, err := s.gitClient.SearchCommits(path, keyword, author, maxCount)
+	if err != nil {
+		return nil, fmt.Errorf("搜索提交历史失败: %w", err)
+	}
+	logs := parseCommitLog(out)
+	// 标记推送状态
+	branch, brErr := s.gitClient.Branch(path)
+	if brErr == nil {
+		branch = strings.TrimSpace(branch)
+		unpushedOut, upErr := s.gitClient.UnpushedCommits(path, branch)
+		unpushedSet := make(map[string]bool)
+		if upErr == nil {
+			for _, h := range strings.Split(strings.TrimSpace(unpushedOut), "\n") {
+				if h != "" {
+					unpushedSet[h] = true
+				}
+			}
+		}
+		for i := range logs {
+			logs[i].Pushed = !unpushedSet[logs[i].Hash]
+		}
+	}
+	return logs, nil
+}
+
+// --- 批量操作 ---
+
+// ProjectOverview 项目概览信息（轻量级）
+type ProjectOverview struct {
+	Key        string `json:"key"`
+	Name       string `json:"name"`
+	Path       string `json:"path"`
+	Branch     string `json:"branch"`
+	HasChanges bool   `json:"hasChanges"`
+	Unpushed   int    `json:"unpushed"`
+	Error      string `json:"error,omitempty"`
+}
+
+// GetAllProjectOverview 获取所有项目的概览状态
+func (s *AppService) GetAllProjectOverview() []ProjectOverview {
+	var results []ProjectOverview
+	for platformName, platform := range s.config.Platforms {
+		for _, user := range platform.Users {
+			for _, proj := range user.Projects {
+				overview := ProjectOverview{
+					Key:  platformName + "/" + user.Username + "/" + proj.Name,
+					Name: proj.Name,
+					Path: proj.Path,
+				}
+				if _, err := os.Stat(proj.Path); os.IsNotExist(err) {
+					overview.Error = "路径不存在"
+					results = append(results, overview)
+					continue
+				}
+				branch, hasChanges, unpushed, err := s.gitClient.QuickStatus(proj.Path)
+				if err != nil {
+					overview.Error = err.Error()
+				} else {
+					overview.Branch = branch
+					overview.HasChanges = hasChanges
+					overview.Unpushed = unpushed
+				}
+				results = append(results, overview)
+			}
+		}
+	}
+	return results
+}
+
+// BatchPullResult 批量 pull 结果
+type BatchPullResult struct {
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// BatchPull 批量拉取指定项目
+func (s *AppService) BatchPull(paths []string) []BatchPullResult {
+	var results []BatchPullResult
+	for _, path := range paths {
+		result := BatchPullResult{Path: path}
+		// 从路径推断名称
+		result.Name = filepath.Base(path)
+
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			result.Message = "路径不存在"
+			results = append(results, result)
+			continue
+		}
+		branch, err := s.gitClient.Branch(path)
+		if err != nil {
+			result.Message = "获取分支失败: " + err.Error()
+			results = append(results, result)
+			continue
+		}
+		_, err = s.gitClient.Run(path, "pull", "origin", strings.TrimSpace(branch))
+		if err != nil {
+			result.Message = err.Error()
+		} else {
+			result.Success = true
+			result.Message = "拉取成功"
+		}
+		results = append(results, result)
+	}
+	return results
+}
+
+// BatchPush 批量推送指定项目
+func (s *AppService) BatchPush(paths []string) []BatchPullResult {
+	var results []BatchPullResult
+	for _, path := range paths {
+		result := BatchPullResult{Path: path}
+		result.Name = filepath.Base(path)
+
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			result.Message = "路径不存在"
+			results = append(results, result)
+			continue
+		}
+		branch, err := s.gitClient.Branch(path)
+		if err != nil {
+			result.Message = "获取分支失败: " + err.Error()
+			results = append(results, result)
+			continue
+		}
+		_, err = s.gitClient.Run(path, "push", "origin", strings.TrimSpace(branch))
+		if err != nil {
+			result.Message = err.Error()
+		} else {
+			result.Success = true
+			result.Message = "推送成功"
+		}
+		results = append(results, result)
+	}
+	return results
+}

@@ -9,8 +9,14 @@ import {
   DeleteOutlined,
   CloudDownloadOutlined,
   LoadingOutlined,
+  AppstoreOutlined,
+  CloudUploadOutlined,
+  SyncOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  BranchesOutlined,
 } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { AppService } from '../../bindings/github.com/zhuy1228/GitPilot/internal/app'
 
 const props = defineProps({
@@ -31,6 +37,19 @@ const addForm = ref({ platform: '', username: '', name: '', path: '' })
 const showCloneDialog = ref(false)
 const cloneForm = ref({ platform: '', username: '', repoURL: '', parentDir: '', name: '' })
 const cloneLoading = ref(false)
+
+// ---- 批量操作 ----
+const showBatchModal = ref(false)
+const batchOverviews = ref([])
+const batchLoading = ref(false)
+const selectedBatchPaths = ref([])
+const batchResults = ref([])
+const batchActionLoading = ref('')
+const batchResultMap = computed(() => {
+  const map = {}
+  batchResults.value.forEach(r => { map[r.path] = r })
+  return map
+})
 
 // 右键菜单
 const contextMenu = ref({ visible: false, x: 0, y: 0, type: '', data: {} })
@@ -393,6 +412,79 @@ async function removeProject(platform, username, name) {
   }
 }
 
+// ---- 批量操作 ----
+async function openBatchModal() {
+  showBatchModal.value = true
+  batchResults.value = []
+  await loadBatchOverview()
+}
+
+async function loadBatchOverview() {
+  batchLoading.value = true
+  try {
+    const overviews = await AppService.GetAllProjectOverview()
+    batchOverviews.value = Array.isArray(overviews) ? overviews : []
+    selectedBatchPaths.value = batchOverviews.value
+      .filter(p => !p.error)
+      .map(p => p.path)
+  } catch (e) {
+    console.error('获取项目概览失败:', e)
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+function toggleBatchPath(path) {
+  const idx = selectedBatchPaths.value.indexOf(path)
+  if (idx >= 0) {
+    selectedBatchPaths.value = selectedBatchPaths.value.filter(p => p !== path)
+  } else {
+    selectedBatchPaths.value = [...selectedBatchPaths.value, path]
+  }
+}
+
+function toggleAllBatchPaths(e) {
+  if (e.target.checked) {
+    selectedBatchPaths.value = batchOverviews.value
+      .filter(p => !p.error)
+      .map(p => p.path)
+  } else {
+    selectedBatchPaths.value = []
+  }
+}
+
+async function doBatchPull() {
+  if (!selectedBatchPaths.value.length) return
+  batchActionLoading.value = 'pull'
+  try {
+    const results = await AppService.BatchPull(selectedBatchPaths.value)
+    batchResults.value = Array.isArray(results) ? results : []
+    const successCount = batchResults.value.filter(r => r.success).length
+    message.info(`批量 Pull 完成：${successCount}/${batchResults.value.length} 成功`)
+    await loadBatchOverview()
+  } catch (e) {
+    Modal.error({ title: '批量 Pull 失败', content: String(e) })
+  } finally {
+    batchActionLoading.value = ''
+  }
+}
+
+async function doBatchPush() {
+  if (!selectedBatchPaths.value.length) return
+  batchActionLoading.value = 'push'
+  try {
+    const results = await AppService.BatchPush(selectedBatchPaths.value)
+    batchResults.value = Array.isArray(results) ? results : []
+    const successCount = batchResults.value.filter(r => r.success).length
+    message.info(`批量 Push 完成：${successCount}/${batchResults.value.length} 成功`)
+    await loadBatchOverview()
+  } catch (e) {
+    Modal.error({ title: '批量 Push 失败', content: String(e) })
+  } finally {
+    batchActionLoading.value = ''
+  }
+}
+
 // 平台 SVG Logo
 const platformLogos = {
   github: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>`,
@@ -415,9 +507,14 @@ onMounted(() => {
   <aside class="sidebar">
     <div class="sidebar-header">
       <span class="logo">GitPilot</span>
-      <a-button type="text" size="small" @click="openAddPlatformDialog" title="添加平台">
-        <template #icon><PlusOutlined /></template>
-      </a-button>
+      <a-space :size="0">
+        <a-button type="text" size="small" @click="openBatchModal" title="批量操作">
+          <template #icon><AppstoreOutlined /></template>
+        </a-button>
+        <a-button type="text" size="small" @click="openAddPlatformDialog" title="添加平台">
+          <template #icon><PlusOutlined /></template>
+        </a-button>
+      </a-space>
     </div>
 
     <div class="sidebar-content" @contextmenu="onSidebarContextMenu">
@@ -600,6 +697,82 @@ onMounted(() => {
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 批量操作弹窗 -->
+    <a-modal
+      v-model:open="showBatchModal"
+      title="批量操作"
+      :width="600"
+      :footer="null"
+    >
+      <div class="batch-panel">
+        <div class="batch-header">
+          <a-checkbox
+            :checked="selectedBatchPaths.length === batchOverviews.filter(p => !p.error).length && batchOverviews.length > 0"
+            :indeterminate="selectedBatchPaths.length > 0 && selectedBatchPaths.length < batchOverviews.filter(p => !p.error).length"
+            @change="toggleAllBatchPaths"
+          >
+            全选
+          </a-checkbox>
+          <span style="flex:1"></span>
+          <a-space :size="4">
+            <a-button size="small" :loading="batchActionLoading === 'pull'" :disabled="!selectedBatchPaths.length" @click="doBatchPull">
+              <template #icon><CloudDownloadOutlined /></template>
+              Pull
+            </a-button>
+            <a-button size="small" :loading="batchActionLoading === 'push'" :disabled="!selectedBatchPaths.length" @click="doBatchPush">
+              <template #icon><CloudUploadOutlined /></template>
+              Push
+            </a-button>
+            <a-button size="small" :loading="batchLoading" @click="loadBatchOverview">
+              <template #icon><SyncOutlined /></template>
+            </a-button>
+          </a-space>
+        </div>
+        <div class="batch-list">
+          <template v-if="batchLoading">
+            <div v-for="i in 4" :key="i" style="padding: 10px 12px;">
+              <div style="height: 14px; background: var(--bg-hover, #333); border-radius: 4px; animation: pulse 1.5s infinite;" :style="{ width: (50 + i * 8) + '%' }"></div>
+            </div>
+          </template>
+          <div v-else-if="!batchOverviews.length" style="padding: 24px; text-align: center; color: var(--text-muted);">
+            暂无项目
+          </div>
+          <template v-else>
+            <div
+              v-for="proj in batchOverviews"
+              :key="proj.key"
+              class="batch-item"
+              :class="{ error: !!proj.error }"
+            >
+              <a-checkbox
+                :checked="selectedBatchPaths.includes(proj.path)"
+                :disabled="!!proj.error"
+                @change="toggleBatchPath(proj.path)"
+                style="flex-shrink: 0;"
+              />
+              <div class="batch-item-info">
+                <div class="batch-item-name">{{ proj.name }}</div>
+                <div class="batch-item-meta">
+                  <a-tag v-if="proj.branch" size="small" color="green">
+                    <BranchesOutlined /> {{ proj.branch }}
+                  </a-tag>
+                  <a-tag v-if="proj.hasChanges" size="small" color="orange">有变更</a-tag>
+                  <a-tag v-if="proj.unpushed > 0" size="small" color="blue">{{ proj.unpushed }} 未推送</a-tag>
+                  <span v-if="proj.error" style="color: #f38ba8; font-size: 11px;">{{ proj.error }}</span>
+                </div>
+              </div>
+              <div v-if="batchResultMap[proj.path]" class="batch-result-icon">
+                <CheckCircleOutlined v-if="batchResultMap[proj.path].success" style="color: #a6e3a1;" />
+                <a-tooltip v-else :title="batchResultMap[proj.path].message">
+                  <CloseCircleOutlined style="color: #f38ba8;" />
+                </a-tooltip>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </a-modal>
   </aside>
 </template>
 
@@ -725,5 +898,73 @@ onMounted(() => {
 
 :deep(.ant-tree .ant-tree-icon__customize) {
   display: none;
+}
+
+/* 批量操作 */
+.batch-panel {
+  margin-top: 8px;
+}
+
+.batch-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color, #313244);
+  margin-bottom: 8px;
+}
+
+.batch-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.batch-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.04));
+  transition: background 0.12s;
+}
+
+.batch-item:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.04));
+}
+
+.batch-item.error {
+  opacity: 0.6;
+}
+
+.batch-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.batch-item-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.batch-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
+.batch-result-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
 }
 </style>

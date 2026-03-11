@@ -31,6 +31,9 @@ import {
   GlobalOutlined,
   SaveOutlined,
   DownloadOutlined,
+  SearchOutlined,
+  WarningOutlined,
+  StopOutlined,
 } from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
 import { AppService } from '../../bindings/github.com/zhuy1228/GitPilot/internal/app'
@@ -99,6 +102,21 @@ const showStashPanel = ref(false)
 const showSettings = ref(false)
 const settingsLoading = ref(false)
 const gitConfig = ref({ userName: '', userEmail: '' })
+
+// ---- 冲突处理 ----
+const isMerging = ref(false)
+const conflictFiles = ref([])
+const selectedConflictFile = ref(null)
+const conflictContent = ref('')
+const conflictSaving = ref(false)
+
+// ---- 提交搜索 ----
+const searchKeyword = ref('')
+const searchAuthor = ref('')
+const searchLoading = ref(false)
+const isSearchMode = ref(false)
+const searchResults = ref([])
+const displayLogs = computed(() => isSearchMode.value ? searchResults.value : commitLogs.value)
 
 // ---- 文件列表拖拽调整宽度 ----
 const fileListWidth = ref(300)
@@ -254,6 +272,20 @@ async function loadStatus() {
     // 不阻塞主渲染，仅文件列表显示异常
   } finally {
     loadingFiles.value = false
+  }
+
+  // 检查合并冲突状态
+  try {
+    isMerging.value = await AppService.IsMerging(props.project.path)
+    if (isMerging.value) {
+      const cFiles = await AppService.GetConflictFiles(props.project.path)
+      conflictFiles.value = Array.isArray(cFiles) ? cFiles : []
+    } else {
+      conflictFiles.value = []
+      selectedConflictFile.value = null
+    }
+  } catch (e) {
+    console.error('检查合并状态失败:', e)
   }
 
   // 第三步：并行加载分支列表 + 提交历史
@@ -794,6 +826,122 @@ async function saveSettings() {
   }
 }
 
+// ---- 冲突处理 ----
+async function selectConflictFile(file) {
+  selectedConflictFile.value = file
+  conflictContent.value = ''
+  try {
+    const content = await AppService.GetConflictFileContent(props.project.path, file.filePath)
+    conflictContent.value = content
+  } catch (e) {
+    conflictContent.value = '读取冲突文件失败: ' + e
+  }
+}
+
+async function saveConflictContent() {
+  if (!selectedConflictFile.value) return
+  conflictSaving.value = true
+  try {
+    await AppService.SaveConflictFile(props.project.path, selectedConflictFile.value.filePath, conflictContent.value)
+    message.success('冲突文件已保存')
+  } catch (e) {
+    Modal.error({ title: '保存失败', content: String(e) })
+  } finally {
+    conflictSaving.value = false
+  }
+}
+
+async function resolveConflictFiles(files) {
+  if (!props.project?.path) return
+  try {
+    const paths = files.map(f => f.filePath)
+    await AppService.ResolveConflictFile(props.project.path, paths)
+    message.success('已标记为已解决')
+    isMerging.value = await AppService.IsMerging(props.project.path)
+    if (isMerging.value) {
+      const cFiles = await AppService.GetConflictFiles(props.project.path)
+      conflictFiles.value = Array.isArray(cFiles) ? cFiles : []
+    } else {
+      conflictFiles.value = []
+    }
+    selectedConflictFile.value = null
+    await refreshFiles()
+  } catch (e) {
+    Modal.error({ title: '解决冲突失败', content: String(e) })
+  }
+}
+
+async function completeMerge() {
+  if (!props.project?.path) return
+  const msg = commitMessage.value.trim() || 'Merge completed'
+  commitLoading.value = true
+  try {
+    await AppService.CommitChanges(props.project.path, msg)
+    commitMessage.value = ''
+    isMerging.value = false
+    conflictFiles.value = []
+    selectedConflictFile.value = null
+    await loadStatus()
+  } catch (e) {
+    Modal.error({ title: '完成合并失败', content: String(e) })
+  } finally {
+    commitLoading.value = false
+  }
+}
+
+async function handleAbortMerge() {
+  if (!props.project?.path) return
+  Modal.confirm({
+    title: '确认中止合并',
+    icon: h(ExclamationCircleOutlined),
+    content: '中止合并将丢弃所有合并更改，回到合并之前的状态。确定继续？',
+    okText: '中止合并',
+    cancelText: '取消',
+    okButtonProps: { danger: true },
+    async onOk() {
+      try {
+        await AppService.AbortMerge(props.project.path)
+        message.success('已中止合并')
+        isMerging.value = false
+        conflictFiles.value = []
+        selectedConflictFile.value = null
+        await loadStatus()
+      } catch (e) {
+        Modal.error({ title: '中止合并失败', content: String(e) })
+      }
+    },
+  })
+}
+
+// ---- 提交搜索 ----
+async function searchCommits() {
+  if (!props.project?.path) return
+  if (!searchKeyword.value.trim() && !searchAuthor.value.trim()) return
+  searchLoading.value = true
+  isSearchMode.value = true
+  try {
+    const results = await AppService.SearchCommitLog(
+      props.project.path,
+      searchKeyword.value.trim(),
+      searchAuthor.value.trim(),
+      100
+    )
+    searchResults.value = Array.isArray(results) ? results : []
+  } catch (e) {
+    console.error('搜索提交失败:', e)
+    searchResults.value = []
+  } finally {
+    searchLoading.value = false
+  }
+}
+
+function clearSearch() {
+  isSearchMode.value = false
+  searchKeyword.value = ''
+  searchAuthor.value = ''
+  searchResults.value = []
+}
+
 // ---- 提交历史 ----
 async function loadCommitLog() {
   if (!props.project?.path) return
@@ -1237,6 +1385,57 @@ watch(activeTab, (tab) => {
               </div>
             </div>
 
+            <!-- 合并冲突提示栏 -->
+            <div v-if="isMerging" class="conflict-banner">
+              <div class="conflict-banner-header">
+                <WarningOutlined style="color: #fab387;" />
+                <span style="font-weight: 600;">合并冲突</span>
+                <span v-if="conflictFiles.length" style="color: var(--text-muted); font-size: 12px;">
+                  {{ conflictFiles.length }} 个文件需要解决
+                </span>
+                <span style="flex:1"></span>
+                <a-space :size="4">
+                  <a-button size="small" danger @click="handleAbortMerge">
+                    <template #icon><StopOutlined /></template>
+                    中止
+                  </a-button>
+                  <a-button
+                    size="small"
+                    type="primary"
+                    :disabled="conflictFiles.length > 0"
+                    :loading="commitLoading"
+                    @click="completeMerge"
+                  >
+                    完成合并
+                  </a-button>
+                </a-space>
+              </div>
+              <div v-if="conflictFiles.length" class="conflict-file-list">
+                <div
+                  v-for="cf in conflictFiles"
+                  :key="cf.filePath"
+                  class="conflict-file-item"
+                  :class="{ active: selectedConflictFile?.filePath === cf.filePath }"
+                  @click="selectConflictFile(cf)"
+                >
+                  <WarningOutlined style="color: #fab387; font-size: 12px;" />
+                  <span class="conflict-file-name">{{ cf.filePath }}</span>
+                  <div class="conflict-file-actions" @click.stop>
+                    <a-tooltip title="标记为已解决">
+                      <span class="conflict-resolve-btn" @click="resolveConflictFiles([cf])">
+                        <CheckCircleOutlined />
+                      </span>
+                    </a-tooltip>
+                  </div>
+                </div>
+              </div>
+              <div v-if="conflictFiles.length > 1" style="padding: 4px 8px; text-align: right; border-top: 1px solid var(--border-color);">
+                <a-button size="small" type="link" @click="resolveConflictFiles(conflictFiles)">
+                  <CheckCircleOutlined /> 全部标记为已解决
+                </a-button>
+              </div>
+            </div>
+
             <div class="file-list-content">
               <!-- 骨架屏 -->
               <template v-if="loadingBase || loadingFiles">
@@ -1316,20 +1515,46 @@ watch(activeTab, (tab) => {
             <!-- ===== 提交历史面板 ===== -->
             <template v-else-if="activeTab === 'history'">
               <div class="file-list-content history-panel">
+                <!-- 搜索栏 -->
+                <div class="search-bar">
+                  <a-input
+                    v-model:value="searchKeyword"
+                    placeholder="搜索提交信息..."
+                    size="small"
+                    allow-clear
+                    @pressEnter="searchCommits"
+                  >
+                    <template #prefix><SearchOutlined style="color: var(--text-muted);" /></template>
+                  </a-input>
+                  <a-input
+                    v-model:value="searchAuthor"
+                    placeholder="作者"
+                    size="small"
+                    style="width: 100px;"
+                    allow-clear
+                    @pressEnter="searchCommits"
+                  >
+                    <template #prefix><UserOutlined style="color: var(--text-muted);" /></template>
+                  </a-input>
+                  <a-button size="small" type="primary" :loading="searchLoading" @click="searchCommits">
+                    <template #icon><SearchOutlined /></template>
+                  </a-button>
+                  <a-button v-if="isSearchMode" size="small" @click="clearSearch">清除</a-button>
+                </div>
                 <!-- 提交列表区域 -->
                 <div class="commit-list-section" :class="{ 'has-selected': selectedCommit }">
-                  <template v-if="commitLogsLoading">
+                  <template v-if="commitLogsLoading || searchLoading">
                     <div v-for="i in 8" :key="i" style="padding: 10px 12px;">
                       <div style="height: 14px; background: var(--bg-hover, #333); border-radius: 4px; animation: pulse 1.5s infinite;" :style="{ width: (40 + i * 7) + '%' }"></div>
                       <div style="height: 10px; background: var(--bg-hover, #333); border-radius: 4px; animation: pulse 1.5s infinite; margin-top: 4px; width: 40%;"></div>
                     </div>
                   </template>
-                  <div v-else-if="!commitLogs.length" style="padding: 24px; text-align: center; color: var(--text-muted);">
-                    暂无提交历史
+                  <div v-else-if="!displayLogs.length" style="padding: 24px; text-align: center; color: var(--text-muted);">
+                    {{ isSearchMode ? '未找到匹配的提交' : '暂无提交历史' }}
                   </div>
                   <template v-else>
                     <div
-                      v-for="log in commitLogs"
+                      v-for="log in displayLogs"
                       :key="log.hash"
                       class="commit-item"
                       :class="{ active: selectedCommit?.hash === log.hash, unpushed: !log.pushed }"
@@ -1503,7 +1728,34 @@ watch(activeTab, (tab) => {
           <div class="file-viewer">
             <!-- 变更模式的文件查看器 -->
             <template v-if="activeTab === 'changes'">
-              <div v-if="!selectedFile" class="empty-state small">
+              <!-- 冲突文件编辑器 -->
+              <template v-if="selectedConflictFile">
+                <div class="viewer-header">
+                  <WarningOutlined style="color: #fab387; margin-right: 6px;" />
+                  <span class="viewer-path">{{ selectedConflictFile.filePath }}</span>
+                  <a-tag color="warning" size="small" style="margin-left: 8px;">冲突</a-tag>
+                  <span style="flex:1"></span>
+                  <a-space :size="6">
+                    <a-button size="small" :loading="conflictSaving" @click="saveConflictContent">
+                      <template #icon><SaveOutlined /></template>
+                      保存
+                    </a-button>
+                    <a-button size="small" type="primary" @click="resolveConflictFiles([selectedConflictFile])">
+                      <template #icon><CheckCircleOutlined /></template>
+                      标记已解决
+                    </a-button>
+                  </a-space>
+                </div>
+                <div class="viewer-content conflict-editor">
+                  <textarea
+                    v-model="conflictContent"
+                    class="conflict-textarea"
+                    spellcheck="false"
+                  ></textarea>
+                </div>
+              </template>
+              <!-- 普通文件查看器 -->
+              <div v-else-if="!selectedFile" class="empty-state small">
                 <span style="color: var(--text-muted)">点击左侧文件查看详情</span>
               </div>
               <template v-else>
@@ -2373,6 +2625,110 @@ watch(activeTab, (tab) => {
 
 .tag-time {
   margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* 冲突处理 */
+.conflict-banner {
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(250, 179, 135, 0.08);
+}
+
+.conflict-banner-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.conflict-file-list {
+  max-height: 150px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border-color);
+}
+
+.conflict-file-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.conflict-file-item:hover {
+  background: var(--bg-hover);
+}
+
+.conflict-file-item.active {
+  background: var(--bg-active);
+}
+
+.conflict-file-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'Consolas', 'Courier New', monospace;
+  color: var(--text-secondary);
+}
+
+.conflict-file-actions {
+  visibility: hidden;
+  flex-shrink: 0;
+}
+
+.conflict-file-item:hover .conflict-file-actions {
+  visibility: visible;
+}
+
+.conflict-resolve-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.conflict-resolve-btn:hover {
+  background: rgba(166, 227, 161, 0.2);
+  color: var(--success, #a6e3a1);
+}
+
+.conflict-editor {
+  display: flex;
+  flex-direction: column;
+}
+
+.conflict-textarea {
+  flex: 1;
+  width: 100%;
+  background: var(--bg-primary, #1e1e2e);
+  color: var(--text-primary);
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 12px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  tab-size: 4;
+}
+
+/* 提交搜索 */
+.search-bar {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 </style>
