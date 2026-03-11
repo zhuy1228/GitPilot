@@ -1,13 +1,13 @@
 [Desktop Entry]
 Version=1.0
-Name=Peter Agent
-Comment=AI Agent Application
+Name=GitPilot
+Comment=Git Repository Management Tool
 # The Exec line includes %u to pass the URL to the application
-Exec=/usr/local/bin/peter-agent %u
+Exec=/usr/local/bin/gitpilot %u
 Terminal=false
 Type=Application
-Icon=peter-agent
+Icon=gitpilot
 Categories=Utility;
-StartupWMClass=peter-agent
+StartupWMClass=gitpilot
 
  
