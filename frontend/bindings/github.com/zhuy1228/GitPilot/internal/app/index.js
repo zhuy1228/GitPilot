@@ -15,6 +15,7 @@ export {
     ConflictFileInfo,
     FileInfo,
     GitConfig,
+    GitStatus,
     PlatformInfo,
     ProjectOverview,
     ProjectStatus,

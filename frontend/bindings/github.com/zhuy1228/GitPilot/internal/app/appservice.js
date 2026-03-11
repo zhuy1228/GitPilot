@@ -87,6 +87,16 @@ export function BatchPush(paths) {
 }
 
 /**
+ * CheckGitInstalled 检查 Git 是否已安装
+ * @returns {$CancellablePromise<$models.GitStatus>}
+ */
+export function CheckGitInstalled() {
+    return $Call.ByID(464620426).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType2($result);
+    }));
+}
+
+/**
  * CheckoutRemoteBranch 检出远程分支到本地
  * @param {string} path
  * @param {string} remoteBranch
@@ -196,7 +206,7 @@ export function FetchProject(path) {
  */
 export function GetAllProjectOverview() {
     return $Call.ByID(2453130151).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType3($result);
+        return $$createType4($result);
     }));
 }
 
@@ -206,7 +216,7 @@ export function GetAllProjectOverview() {
  */
 export function GetAppSettings() {
     return $Call.ByID(428589026).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType5($result);
+        return $$createType6($result);
     }));
 }
 
@@ -217,7 +227,7 @@ export function GetAppSettings() {
  */
 export function GetBranches(path) {
     return $Call.ByID(1686190192, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType7($result);
+        return $$createType8($result);
     }));
 }
 
@@ -250,7 +260,7 @@ export function GetCommitFileDiff(path, hash, filePath) {
  */
 export function GetCommitFiles(path, hash) {
     return $Call.ByID(2420707876, path, hash).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType9($result);
+        return $$createType10($result);
     }));
 }
 
@@ -262,7 +272,7 @@ export function GetCommitFiles(path, hash) {
  */
 export function GetCommitLog(path, count) {
     return $Call.ByID(1281870789, path, count).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType11($result);
+        return $$createType12($result);
     }));
 }
 
@@ -283,7 +293,7 @@ export function GetConflictFileContent(projectPath, filePath) {
  */
 export function GetConflictFiles(path) {
     return $Call.ByID(2446806137, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType13($result);
+        return $$createType14($result);
     }));
 }
 
@@ -323,7 +333,7 @@ export function GetFileDiffStaged(projectPath, filePath) {
  */
 export function GetGitGlobalConfig() {
     return $Call.ByID(154811497).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType15($result);
+        return $$createType16($result);
     }));
 }
 
@@ -334,7 +344,7 @@ export function GetGitGlobalConfig() {
  */
 export function GetPlatformInfo(name) {
     return $Call.ByID(2668095547, name).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType17($result);
+        return $$createType18($result);
     }));
 }
 
@@ -345,7 +355,7 @@ export function GetPlatformInfo(name) {
  */
 export function GetProjectChangedFiles(path) {
     return $Call.ByID(2302591462, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType19($result);
+        return $$createType20($result);
     }));
 }
 
@@ -356,7 +366,7 @@ export function GetProjectChangedFiles(path) {
  */
 export function GetProjectStatus(path) {
     return $Call.ByID(3451089027, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType21($result);
+        return $$createType22($result);
     }));
 }
 
@@ -366,7 +376,7 @@ export function GetProjectStatus(path) {
  */
 export function GetProjectTree() {
     return $Call.ByID(651189689).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType23($result);
+        return $$createType24($result);
     }));
 }
 
@@ -377,7 +387,7 @@ export function GetProjectTree() {
  */
 export function GetRemoteBranches(path) {
     return $Call.ByID(994796370, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType7($result);
+        return $$createType8($result);
     }));
 }
 
@@ -388,7 +398,7 @@ export function GetRemoteBranches(path) {
  */
 export function GetStashList(path) {
     return $Call.ByID(1948257945, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType25($result);
+        return $$createType26($result);
     }));
 }
 
@@ -399,7 +409,7 @@ export function GetStashList(path) {
  */
 export function GetTags(path) {
     return $Call.ByID(3979169621, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType27($result);
+        return $$createType28($result);
     }));
 }
 
@@ -411,8 +421,18 @@ export function GetTags(path) {
  */
 export function GetUserInfo(platform, username) {
     return $Call.ByID(2674655707, platform, username).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType29($result);
+        return $$createType30($result);
     }));
+}
+
+/**
+ * InstallGit 下载并安装 Git
+ * installDir: 用户选择的安装目录（Windows 有效）
+ * @param {string} installDir
+ * @returns {$CancellablePromise<void>}
+ */
+export function InstallGit(installDir) {
+    return $Call.ByID(1052641569, installDir);
 }
 
 /**
@@ -545,7 +565,7 @@ export function SaveConflictFile(projectPath, filePath, content) {
  */
 export function SearchCommitLog(path, keyword, author, maxCount) {
     return $Call.ByID(2874450917, path, keyword, author, maxCount).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType11($result);
+        return $$createType12($result);
     }));
 }
 
@@ -555,6 +575,14 @@ export function SearchCommitLog(path, keyword, author, maxCount) {
  */
 export function SelectDirectory() {
     return $Call.ByID(2318416763);
+}
+
+/**
+ * SelectGitInstallDir 打开文件夹选择器让用户选择 Git 安装路径
+ * @returns {$CancellablePromise<string>}
+ */
+export function SelectGitInstallDir() {
+    return $Call.ByID(2941074074);
 }
 
 /**
@@ -697,31 +725,32 @@ export function UpdateUser(platform, oldUsername, newUsername, token) {
 // Private type creation functions
 const $$createType0 = $models.BatchPullResult.createFrom;
 const $$createType1 = $Create.Array($$createType0);
-const $$createType2 = $models.ProjectOverview.createFrom;
-const $$createType3 = $Create.Array($$createType2);
-const $$createType4 = config$0.Settings.createFrom;
-const $$createType5 = $Create.Nullable($$createType4);
-const $$createType6 = $models.BranchInfo.createFrom;
-const $$createType7 = $Create.Array($$createType6);
-const $$createType8 = $models.CommitFileInfo.createFrom;
-const $$createType9 = $Create.Array($$createType8);
-const $$createType10 = $models.CommitLog.createFrom;
-const $$createType11 = $Create.Array($$createType10);
-const $$createType12 = $models.ConflictFileInfo.createFrom;
-const $$createType13 = $Create.Array($$createType12);
-const $$createType14 = $models.GitConfig.createFrom;
-const $$createType15 = $Create.Nullable($$createType14);
-const $$createType16 = $models.PlatformInfo.createFrom;
-const $$createType17 = $Create.Nullable($$createType16);
-const $$createType18 = $models.FileInfo.createFrom;
-const $$createType19 = $Create.Array($$createType18);
-const $$createType20 = $models.ProjectStatus.createFrom;
-const $$createType21 = $Create.Nullable($$createType20);
-const $$createType22 = $models.TreeNode.createFrom;
-const $$createType23 = $Create.Array($$createType22);
-const $$createType24 = $models.StashInfo.createFrom;
-const $$createType25 = $Create.Array($$createType24);
-const $$createType26 = $models.TagInfo.createFrom;
-const $$createType27 = $Create.Array($$createType26);
-const $$createType28 = $models.UserInfo.createFrom;
-const $$createType29 = $Create.Nullable($$createType28);
+const $$createType2 = $models.GitStatus.createFrom;
+const $$createType3 = $models.ProjectOverview.createFrom;
+const $$createType4 = $Create.Array($$createType3);
+const $$createType5 = config$0.Settings.createFrom;
+const $$createType6 = $Create.Nullable($$createType5);
+const $$createType7 = $models.BranchInfo.createFrom;
+const $$createType8 = $Create.Array($$createType7);
+const $$createType9 = $models.CommitFileInfo.createFrom;
+const $$createType10 = $Create.Array($$createType9);
+const $$createType11 = $models.CommitLog.createFrom;
+const $$createType12 = $Create.Array($$createType11);
+const $$createType13 = $models.ConflictFileInfo.createFrom;
+const $$createType14 = $Create.Array($$createType13);
+const $$createType15 = $models.GitConfig.createFrom;
+const $$createType16 = $Create.Nullable($$createType15);
+const $$createType17 = $models.PlatformInfo.createFrom;
+const $$createType18 = $Create.Nullable($$createType17);
+const $$createType19 = $models.FileInfo.createFrom;
+const $$createType20 = $Create.Array($$createType19);
+const $$createType21 = $models.ProjectStatus.createFrom;
+const $$createType22 = $Create.Nullable($$createType21);
+const $$createType23 = $models.TreeNode.createFrom;
+const $$createType24 = $Create.Array($$createType23);
+const $$createType25 = $models.StashInfo.createFrom;
+const $$createType26 = $Create.Array($$createType25);
+const $$createType27 = $models.TagInfo.createFrom;
+const $$createType28 = $Create.Array($$createType27);
+const $$createType29 = $models.UserInfo.createFrom;
+const $$createType30 = $Create.Nullable($$createType29);

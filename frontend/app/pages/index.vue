@@ -2,6 +2,11 @@
 import { ref, onBeforeUnmount } from 'vue'
 
 const selectedProject = ref(null)
+const gitReady = ref(false)
+
+function onGitReady() {
+  gitReady.value = true
+}
 
 function onSelectProject(project) {
   selectedProject.value = project
@@ -43,7 +48,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="main-layout">
+  <!-- Git 环境检查 -->
+  <GitCheck v-if="!gitReady" @ready="onGitReady" />
+
+  <!-- 主界面 -->
+  <div v-else class="main-layout">
     <Sidebar :selected-project="selectedProject" :style="{ width: sidebarWidth + 'px' }" @select-project="onSelectProject" />
     <div class="resize-handle" @mousedown="startSidebarResize"></div>
     <ContentArea :project="selectedProject" />

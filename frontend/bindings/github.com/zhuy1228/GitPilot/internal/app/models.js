@@ -329,6 +329,51 @@ export class GitConfig {
 }
 
 /**
+ * GitStatus Git 安装状态
+ */
+export class GitStatus {
+    /**
+     * Creates a new GitStatus instance.
+     * @param {Partial<GitStatus>} [$$source = {}] - The source object to create the GitStatus.
+     */
+    constructor($$source = {}) {
+        if (!("installed" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["installed"] = false;
+        }
+        if (!("version" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["version"] = "";
+        }
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new GitStatus instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {GitStatus}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new GitStatus(/** @type {Partial<GitStatus>} */($$parsedSource));
+    }
+}
+
+/**
  * PlatformInfo 平台信息
  */
 export class PlatformInfo {
