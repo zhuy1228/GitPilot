@@ -62,6 +62,35 @@ func (g *GitClient) RunWithProxy(path string, useProxy *bool, args ...string) (s
 	return stdout.String(), nil
 }
 
+// RunWithProxyTimeout 执行 git 命令，支持自定义超时
+func (g *GitClient) RunWithProxyTimeout(path string, useProxy *bool, timeout time.Duration, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	header := []string{"-C", path, "-c", "core.quotePath=false"}
+	enableProxy := g.Enabled
+	if useProxy != nil {
+		enableProxy = *useProxy
+	}
+	if enableProxy {
+		header = append(header, "-c", "http.proxy="+g.Proxy, "-c", "https.proxy="+g.Proxy)
+	}
+	argsArr := append(header, args...)
+	log.Println(argsArr)
+	cmd := exec.CommandContext(ctx, "git", argsArr...)
+	hideWindow(cmd)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if ctx.Err() == context.DeadlineExceeded {
+		return "", fmt.Errorf("git command timeout: git %v", args)
+	}
+	if err != nil {
+		return "", fmt.Errorf("git command error: %v, stderr: %s", err, stderr.String())
+	}
+	return stdout.String(), nil
+}
+
 func (g *GitClient) Pull(path string) (string, error) {
 	return g.Run(path, "pull")
 }
@@ -90,11 +119,20 @@ func (g *GitClient) Status(path string) (string, error) {
 }
 
 func (g *GitClient) Clone(repoURL, path string) (string, error) {
+	return g.CloneWithProxy(repoURL, path, nil)
+}
+
+// CloneWithProxy 克隆仓库，useProxy 可独立控制代理
+func (g *GitClient) CloneWithProxy(repoURL, path string, useProxy *bool) (string, error) {
 	// Clone 操作可能需要较长时间，使用独立的超时设置（10 分钟）
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	args := []string{"-c", "core.quotePath=false"}
-	if g.Enabled {
+	enableProxy := g.Enabled
+	if useProxy != nil {
+		enableProxy = *useProxy
+	}
+	if enableProxy {
 		args = append(args, "-c", "http.proxy="+g.Proxy, "-c", "https.proxy="+g.Proxy)
 	}
 	args = append(args, "clone", "--progress", repoURL, path)

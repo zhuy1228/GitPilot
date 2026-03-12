@@ -7,6 +7,58 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
+ * AssetInfo Release 附件
+ */
+export class AssetInfo {
+    /**
+     * Creates a new AssetInfo instance.
+     * @param {Partial<AssetInfo>} [$$source = {}] - The source object to create the AssetInfo.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["id"] = 0;
+        }
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("size" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["size"] = 0;
+        }
+        if (!("downloadUrl" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["downloadUrl"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AssetInfo instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {AssetInfo}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AssetInfo(/** @type {Partial<AssetInfo>} */($$parsedSource));
+    }
+}
+
+/**
  * BatchPullResult 批量 pull 结果
  */
 export class BatchPullResult {
@@ -426,6 +478,243 @@ export class GitStatus {
 }
 
 /**
+ * MigrateOptions 迁移选项
+ */
+export class MigrateOptions {
+    /**
+     * Creates a new MigrateOptions instance.
+     * @param {Partial<MigrateOptions>} [$$source = {}] - The source object to create the MigrateOptions.
+     */
+    constructor($$source = {}) {
+        if (!("labels" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["labels"] = false;
+        }
+        if (!("issues" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["issues"] = false;
+        }
+        if (!("pullRequests" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["pullRequests"] = false;
+        }
+        if (!("releases" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["releases"] = false;
+        }
+        if (!("milestones" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["milestones"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new MigrateOptions instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {MigrateOptions}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new MigrateOptions(/** @type {Partial<MigrateOptions>} */($$parsedSource));
+    }
+}
+
+/**
+ * MigrateResult 迁移结果
+ */
+export class MigrateResult {
+    /**
+     * Creates a new MigrateResult instance.
+     * @param {Partial<MigrateResult>} [$$source = {}] - The source object to create the MigrateResult.
+     */
+    constructor($$source = {}) {
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("success" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["success"] = false;
+        }
+        if (!("message" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["message"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["cloneUrl"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["remoteName"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new MigrateResult instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {MigrateResult}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new MigrateResult(/** @type {Partial<MigrateResult>} */($$parsedSource));
+    }
+}
+
+/**
+ * OnlineMigrateCompareResult 在线迁移对比结果
+ */
+export class OnlineMigrateCompareResult {
+    /**
+     * Creates a new OnlineMigrateCompareResult instance.
+     * @param {Partial<OnlineMigrateCompareResult>} [$$source = {}] - The source object to create the OnlineMigrateCompareResult.
+     */
+    constructor($$source = {}) {
+        if (!("sourceRepos" in $$source)) {
+            /**
+             * 源平台所有仓库
+             * @member
+             * @type {RepoInfo[]}
+             */
+            this["sourceRepos"] = [];
+        }
+        if (!("targetRepos" in $$source)) {
+            /**
+             * 目标平台所有仓库
+             * @member
+             * @type {RepoInfo[]}
+             */
+            this["targetRepos"] = [];
+        }
+        if (!("missingRepos" in $$source)) {
+            /**
+             * 目标平台缺少的仓库
+             * @member
+             * @type {RepoInfo[]}
+             */
+            this["missingRepos"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new OnlineMigrateCompareResult instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {OnlineMigrateCompareResult}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType1;
+        const $$createField1_0 = $$createType1;
+        const $$createField2_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("sourceRepos" in $$parsedSource) {
+            $$parsedSource["sourceRepos"] = $$createField0_0($$parsedSource["sourceRepos"]);
+        }
+        if ("targetRepos" in $$parsedSource) {
+            $$parsedSource["targetRepos"] = $$createField1_0($$parsedSource["targetRepos"]);
+        }
+        if ("missingRepos" in $$parsedSource) {
+            $$parsedSource["missingRepos"] = $$createField2_0($$parsedSource["missingRepos"]);
+        }
+        return new OnlineMigrateCompareResult(/** @type {Partial<OnlineMigrateCompareResult>} */($$parsedSource));
+    }
+}
+
+/**
+ * OnlineMigrateItemResult 单个仓库在线迁移结果
+ */
+export class OnlineMigrateItemResult {
+    /**
+     * Creates a new OnlineMigrateItemResult instance.
+     * @param {Partial<OnlineMigrateItemResult>} [$$source = {}] - The source object to create the OnlineMigrateItemResult.
+     */
+    constructor($$source = {}) {
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["cloneUrl"] = undefined;
+        }
+        if (!("success" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["success"] = false;
+        }
+        if (!("message" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["message"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new OnlineMigrateItemResult instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {OnlineMigrateItemResult}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new OnlineMigrateItemResult(/** @type {Partial<OnlineMigrateItemResult>} */($$parsedSource));
+    }
+}
+
+/**
  * ProjectOverview 项目概览信息（轻量级）
  */
 export class ProjectOverview {
@@ -560,8 +849,8 @@ export class ProjectStatus {
      * @returns {ProjectStatus}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType1;
-        const $$createField4_0 = $$createType3;
+        const $$createField2_0 = $$createType3;
+        const $$createField4_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("remotes" in $$parsedSource) {
             $$parsedSource["remotes"] = $$createField2_0($$parsedSource["remotes"]);
@@ -619,6 +908,149 @@ export class PushAllResult {
 }
 
 /**
+ * ReleaseInfo 通用 Release 信息
+ */
+export class ReleaseInfo {
+    /**
+     * Creates a new ReleaseInfo instance.
+     * @param {Partial<ReleaseInfo>} [$$source = {}] - The source object to create the ReleaseInfo.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["id"] = 0;
+        }
+        if (!("tagName" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["tagName"] = "";
+        }
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("body" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["body"] = "";
+        }
+        if (!("draft" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["draft"] = false;
+        }
+        if (!("prerelease" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["prerelease"] = false;
+        }
+        if (!("createdAt" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["createdAt"] = "";
+        }
+        if (!("publishedAt" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["publishedAt"] = "";
+        }
+        if (!("assets" in $$source)) {
+            /**
+             * @member
+             * @type {AssetInfo[]}
+             */
+            this["assets"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ReleaseInfo instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ReleaseInfo}
+     */
+    static createFrom($$source = {}) {
+        const $$createField8_0 = $$createType7;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("assets" in $$parsedSource) {
+            $$parsedSource["assets"] = $$createField8_0($$parsedSource["assets"]);
+        }
+        return new ReleaseInfo(/** @type {Partial<ReleaseInfo>} */($$parsedSource));
+    }
+}
+
+/**
+ * ReleaseSyncResult 单条 Release 同步结果
+ */
+export class ReleaseSyncResult {
+    /**
+     * Creates a new ReleaseSyncResult instance.
+     * @param {Partial<ReleaseSyncResult>} [$$source = {}] - The source object to create the ReleaseSyncResult.
+     */
+    constructor($$source = {}) {
+        if (!("tagName" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["tagName"] = "";
+        }
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("success" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["success"] = false;
+        }
+        if (!("message" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["message"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ReleaseSyncResult instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ReleaseSyncResult}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ReleaseSyncResult(/** @type {Partial<ReleaseSyncResult>} */($$parsedSource));
+    }
+}
+
+/**
  * RemoteItem 远程仓库信息
  */
 export class RemoteItem {
@@ -653,6 +1085,93 @@ export class RemoteItem {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new RemoteItem(/** @type {Partial<RemoteItem>} */($$parsedSource));
+    }
+}
+
+/**
+ * RepoInfo 仓库信息
+ */
+export class RepoInfo {
+    /**
+     * Creates a new RepoInfo instance.
+     * @param {Partial<RepoInfo>} [$$source = {}] - The source object to create the RepoInfo.
+     */
+    constructor($$source = {}) {
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("fullName" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["fullName"] = "";
+        }
+        if (!("description" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["description"] = "";
+        }
+        if (!("cloneUrl" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["cloneUrl"] = "";
+        }
+        if (!("sshUrl" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["sshUrl"] = "";
+        }
+        if (!("private" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["private"] = false;
+        }
+        if (!("fork" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["fork"] = false;
+        }
+        if (!("empty" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["empty"] = false;
+        }
+        if (!("updatedAt" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["updatedAt"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RepoInfo instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {RepoInfo}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RepoInfo(/** @type {Partial<RepoInfo>} */($$parsedSource));
     }
 }
 
@@ -822,7 +1341,7 @@ export class TreeNode {
      * @returns {TreeNode}
      */
     static createFrom($$source = {}) {
-        const $$createField5_0 = $$createType5;
+        const $$createField5_0 = $$createType9;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("children" in $$parsedSource) {
             $$parsedSource["children"] = $$createField5_0($$parsedSource["children"]);
@@ -832,9 +1351,13 @@ export class TreeNode {
 }
 
 // Private type creation functions
-const $$createType0 = RemoteItem.createFrom;
+const $$createType0 = RepoInfo.createFrom;
 const $$createType1 = $Create.Array($$createType0);
-const $$createType2 = FileInfo.createFrom;
+const $$createType2 = RemoteItem.createFrom;
 const $$createType3 = $Create.Array($$createType2);
-const $$createType4 = TreeNode.createFrom;
+const $$createType4 = FileInfo.createFrom;
 const $$createType5 = $Create.Array($$createType4);
+const $$createType6 = AssetInfo.createFrom;
+const $$createType7 = $Create.Array($$createType6);
+const $$createType8 = TreeNode.createFrom;
+const $$createType9 = $Create.Array($$createType8);

@@ -76,6 +76,21 @@ export function AddRemote(path, name, url) {
 }
 
 /**
+ * BatchMigrateProjects 批量迁移项目到目标平台
+ * @param {string[]} projectPaths
+ * @param {string} targetCredPlatform
+ * @param {string} targetCredUsername
+ * @param {string} description
+ * @param {boolean} $private
+ * @returns {$CancellablePromise<$models.MigrateResult[]>}
+ */
+export function BatchMigrateProjects(projectPaths, targetCredPlatform, targetCredUsername, description, $private) {
+    return $Call.ByID(1641390103, projectPaths, targetCredPlatform, targetCredUsername, description, $private).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
  * BatchPull 批量拉取指定项目
  * @param {string[]} paths
  * @param {string} remote
@@ -83,7 +98,7 @@ export function AddRemote(path, name, url) {
  */
 export function BatchPull(paths, remote) {
     return $Call.ByID(758996647, paths, remote).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType3($result);
     }));
 }
 
@@ -95,7 +110,7 @@ export function BatchPull(paths, remote) {
  */
 export function BatchPush(paths, remote) {
     return $Call.ByID(794082076, paths, remote).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType3($result);
     }));
 }
 
@@ -105,7 +120,7 @@ export function BatchPush(paths, remote) {
  */
 export function CheckGitInstalled() {
     return $Call.ByID(464620426).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType2($result);
+        return $$createType4($result);
     }));
 }
 
@@ -221,7 +236,7 @@ export function FetchProject(path, remote) {
  */
 export function GetAllProjectOverview() {
     return $Call.ByID(2453130151).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType4($result);
+        return $$createType6($result);
     }));
 }
 
@@ -231,7 +246,7 @@ export function GetAllProjectOverview() {
  */
 export function GetAppSettings() {
     return $Call.ByID(428589026).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType6($result);
+        return $$createType8($result);
     }));
 }
 
@@ -242,7 +257,7 @@ export function GetAppSettings() {
  */
 export function GetBranches(path) {
     return $Call.ByID(1686190192, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType8($result);
+        return $$createType10($result);
     }));
 }
 
@@ -275,7 +290,7 @@ export function GetCommitFileDiff(path, hash, filePath) {
  */
 export function GetCommitFiles(path, hash) {
     return $Call.ByID(2420707876, path, hash).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType10($result);
+        return $$createType12($result);
     }));
 }
 
@@ -287,7 +302,7 @@ export function GetCommitFiles(path, hash) {
  */
 export function GetCommitLog(path, count) {
     return $Call.ByID(1281870789, path, count).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType12($result);
+        return $$createType14($result);
     }));
 }
 
@@ -308,7 +323,7 @@ export function GetConflictFileContent(projectPath, filePath) {
  */
 export function GetConflictFiles(path) {
     return $Call.ByID(2446806137, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType14($result);
+        return $$createType16($result);
     }));
 }
 
@@ -318,7 +333,7 @@ export function GetConflictFiles(path) {
  */
 export function GetCredentials() {
     return $Call.ByID(4214051290).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType16($result);
+        return $$createType18($result);
     }));
 }
 
@@ -358,7 +373,7 @@ export function GetFileDiffStaged(projectPath, filePath) {
  */
 export function GetGitGlobalConfig() {
     return $Call.ByID(154811497).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType18($result);
+        return $$createType20($result);
     }));
 }
 
@@ -368,7 +383,7 @@ export function GetGitGlobalConfig() {
  */
 export function GetGroups() {
     return $Call.ByID(1600884836).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType20($result);
+        return $$createType22($result);
     }));
 }
 
@@ -379,7 +394,7 @@ export function GetGroups() {
  */
 export function GetProjectChangedFiles(path) {
     return $Call.ByID(2302591462, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType22($result);
+        return $$createType24($result);
     }));
 }
 
@@ -399,7 +414,7 @@ export function GetProjectProxy(path) {
  */
 export function GetProjectStatus(path) {
     return $Call.ByID(3451089027, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType24($result);
+        return $$createType26($result);
     }));
 }
 
@@ -409,7 +424,7 @@ export function GetProjectStatus(path) {
  */
 export function GetProjectTree() {
     return $Call.ByID(651189689).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType26($result);
+        return $$createType28($result);
     }));
 }
 
@@ -421,7 +436,21 @@ export function GetProjectTree() {
  */
 export function GetRemoteBranches(path, remote) {
     return $Call.ByID(994796370, path, remote).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType8($result);
+        return $$createType10($result);
+    }));
+}
+
+/**
+ * GetRemoteReleases 获取指定远程仓库的 Release 列表
+ * overrideToken: 前端传入的 Token，优先于凭证中的 Token
+ * @param {string} projectPath
+ * @param {string} remoteName
+ * @param {string} overrideToken
+ * @returns {$CancellablePromise<$models.ReleaseInfo[]>}
+ */
+export function GetRemoteReleases(projectPath, remoteName, overrideToken) {
+    return $Call.ByID(280863080, projectPath, remoteName, overrideToken).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType30($result);
     }));
 }
 
@@ -432,7 +461,7 @@ export function GetRemoteBranches(path, remote) {
  */
 export function GetRemotes(path) {
     return $Call.ByID(975520027, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType28($result);
+        return $$createType32($result);
     }));
 }
 
@@ -443,7 +472,7 @@ export function GetRemotes(path) {
  */
 export function GetStashList(path) {
     return $Call.ByID(1948257945, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType30($result);
+        return $$createType34($result);
     }));
 }
 
@@ -454,7 +483,7 @@ export function GetStashList(path) {
  */
 export function GetTags(path) {
     return $Call.ByID(3979169621, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType32($result);
+        return $$createType36($result);
     }));
 }
 
@@ -488,6 +517,28 @@ export function MergeBranch(path, branch) {
 }
 
 /**
+ * MigrateProject 将项目迁移到目标平台
+ * targetCredPlatform + targetCredUsername 用于定位目标凭证
+ * repoName: 目标仓库名（空则用项目名）
+ * remoteName: 新增的远程名（空则用平台名）
+ * private: 是否私有仓库
+ * description: 仓库描述
+ * @param {string} projectPath
+ * @param {string} targetCredPlatform
+ * @param {string} targetCredUsername
+ * @param {string} repoName
+ * @param {string} remoteName
+ * @param {string} description
+ * @param {boolean} $private
+ * @returns {$CancellablePromise<$models.MigrateResult | null>}
+ */
+export function MigrateProject(projectPath, targetCredPlatform, targetCredUsername, repoName, remoteName, description, $private) {
+    return $Call.ByID(618007206, projectPath, targetCredPlatform, targetCredUsername, repoName, remoteName, description, $private).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType37($result);
+    }));
+}
+
+/**
  * MoveProjectToGroup 移动项目到指定分组
  * @param {string} path
  * @param {string} group
@@ -495,6 +546,46 @@ export function MergeBranch(path, branch) {
  */
 export function MoveProjectToGroup(path, group) {
     return $Call.ByID(1699187666, path, group);
+}
+
+/**
+ * OnlineMigrateCompare 对比两个平台的仓库列表
+ * @param {string} srcPlatform
+ * @param {string} srcBaseURL
+ * @param {string} srcUsername
+ * @param {string} srcToken
+ * @param {string} tgtPlatform
+ * @param {string} tgtBaseURL
+ * @param {string} tgtUsername
+ * @param {string} tgtToken
+ * @returns {$CancellablePromise<$models.OnlineMigrateCompareResult | null>}
+ */
+export function OnlineMigrateCompare(srcPlatform, srcBaseURL, srcUsername, srcToken, tgtPlatform, tgtBaseURL, tgtUsername, tgtToken) {
+    return $Call.ByID(3514758503, srcPlatform, srcBaseURL, srcUsername, srcToken, tgtPlatform, tgtBaseURL, tgtUsername, tgtToken).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType39($result);
+    }));
+}
+
+/**
+ * OnlineMigrateExecute 执行在线迁移
+ * @param {string} srcPlatform
+ * @param {string} srcBaseURL
+ * @param {string} srcUsername
+ * @param {string} srcToken
+ * @param {string} tgtPlatform
+ * @param {string} tgtBaseURL
+ * @param {string} tgtUsername
+ * @param {string} tgtToken
+ * @param {string[]} repoNames
+ * @param {boolean} srcUseProxy
+ * @param {boolean} tgtUseProxy
+ * @param {$models.MigrateOptions} opts
+ * @returns {$CancellablePromise<$models.OnlineMigrateItemResult[]>}
+ */
+export function OnlineMigrateExecute(srcPlatform, srcBaseURL, srcUsername, srcToken, tgtPlatform, tgtBaseURL, tgtUsername, tgtToken, repoNames, srcUseProxy, tgtUseProxy, opts) {
+    return $Call.ByID(357541815, srcPlatform, srcBaseURL, srcUsername, srcToken, tgtPlatform, tgtBaseURL, tgtUsername, tgtToken, repoNames, srcUseProxy, tgtUseProxy, opts).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType41($result);
+    }));
 }
 
 /**
@@ -536,7 +627,7 @@ export function PushTag(path, name, remote) {
  */
 export function PushTagToAllRemotes(path, tagName) {
     return $Call.ByID(2343581171, path, tagName).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType34($result);
+        return $$createType43($result);
     }));
 }
 
@@ -547,7 +638,7 @@ export function PushTagToAllRemotes(path, tagName) {
  */
 export function PushToAllRemotes(path) {
     return $Call.ByID(1027392731, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType34($result);
+        return $$createType43($result);
     }));
 }
 
@@ -642,7 +733,7 @@ export function SaveConflictFile(projectPath, filePath, content) {
  */
 export function SearchCommitLog(path, keyword, author, maxCount) {
     return $Call.ByID(2874450917, path, keyword, author, maxCount).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType12($result);
+        return $$createType14($result);
     }));
 }
 
@@ -761,6 +852,22 @@ export function SwitchBranch(path, branch) {
 }
 
 /**
+ * SyncReleases 将源远程仓库的 Release 同步到目标远程仓库
+ * 仅同步目标不存在的 Release，包括附件
+ * @param {string} projectPath
+ * @param {string} sourceRemote
+ * @param {string} targetRemote
+ * @param {string} srcOverrideToken
+ * @param {string} tgtOverrideToken
+ * @returns {$CancellablePromise<$models.ReleaseSyncResult[]>}
+ */
+export function SyncReleases(projectPath, sourceRemote, targetRemote, srcOverrideToken, tgtOverrideToken) {
+    return $Call.ByID(3895607505, projectPath, sourceRemote, targetRemote, srcOverrideToken, tgtOverrideToken).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType45($result);
+    }));
+}
+
+/**
  * UnstageAll 取消暂存所有文件
  * @param {string} path
  * @returns {$CancellablePromise<void>}
@@ -812,38 +919,49 @@ export function UpdateGroup(oldName, newName, icon) {
 }
 
 // Private type creation functions
-const $$createType0 = $models.BatchPullResult.createFrom;
+const $$createType0 = $models.MigrateResult.createFrom;
 const $$createType1 = $Create.Array($$createType0);
-const $$createType2 = $models.GitStatus.createFrom;
-const $$createType3 = $models.ProjectOverview.createFrom;
-const $$createType4 = $Create.Array($$createType3);
-const $$createType5 = config$0.Settings.createFrom;
-const $$createType6 = $Create.Nullable($$createType5);
-const $$createType7 = $models.BranchInfo.createFrom;
-const $$createType8 = $Create.Array($$createType7);
-const $$createType9 = $models.CommitFileInfo.createFrom;
+const $$createType2 = $models.BatchPullResult.createFrom;
+const $$createType3 = $Create.Array($$createType2);
+const $$createType4 = $models.GitStatus.createFrom;
+const $$createType5 = $models.ProjectOverview.createFrom;
+const $$createType6 = $Create.Array($$createType5);
+const $$createType7 = config$0.Settings.createFrom;
+const $$createType8 = $Create.Nullable($$createType7);
+const $$createType9 = $models.BranchInfo.createFrom;
 const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = $models.CommitLog.createFrom;
+const $$createType11 = $models.CommitFileInfo.createFrom;
 const $$createType12 = $Create.Array($$createType11);
-const $$createType13 = $models.ConflictFileInfo.createFrom;
+const $$createType13 = $models.CommitLog.createFrom;
 const $$createType14 = $Create.Array($$createType13);
-const $$createType15 = $models.CredentialInfo.createFrom;
+const $$createType15 = $models.ConflictFileInfo.createFrom;
 const $$createType16 = $Create.Array($$createType15);
-const $$createType17 = $models.GitConfig.createFrom;
-const $$createType18 = $Create.Nullable($$createType17);
-const $$createType19 = config$0.Group.createFrom;
-const $$createType20 = $Create.Array($$createType19);
-const $$createType21 = $models.FileInfo.createFrom;
+const $$createType17 = $models.CredentialInfo.createFrom;
+const $$createType18 = $Create.Array($$createType17);
+const $$createType19 = $models.GitConfig.createFrom;
+const $$createType20 = $Create.Nullable($$createType19);
+const $$createType21 = config$0.Group.createFrom;
 const $$createType22 = $Create.Array($$createType21);
-const $$createType23 = $models.ProjectStatus.createFrom;
-const $$createType24 = $Create.Nullable($$createType23);
-const $$createType25 = $models.TreeNode.createFrom;
-const $$createType26 = $Create.Array($$createType25);
-const $$createType27 = $models.RemoteItem.createFrom;
+const $$createType23 = $models.FileInfo.createFrom;
+const $$createType24 = $Create.Array($$createType23);
+const $$createType25 = $models.ProjectStatus.createFrom;
+const $$createType26 = $Create.Nullable($$createType25);
+const $$createType27 = $models.TreeNode.createFrom;
 const $$createType28 = $Create.Array($$createType27);
-const $$createType29 = $models.StashInfo.createFrom;
+const $$createType29 = $models.ReleaseInfo.createFrom;
 const $$createType30 = $Create.Array($$createType29);
-const $$createType31 = $models.TagInfo.createFrom;
+const $$createType31 = $models.RemoteItem.createFrom;
 const $$createType32 = $Create.Array($$createType31);
-const $$createType33 = $models.PushAllResult.createFrom;
+const $$createType33 = $models.StashInfo.createFrom;
 const $$createType34 = $Create.Array($$createType33);
+const $$createType35 = $models.TagInfo.createFrom;
+const $$createType36 = $Create.Array($$createType35);
+const $$createType37 = $Create.Nullable($$createType0);
+const $$createType38 = $models.OnlineMigrateCompareResult.createFrom;
+const $$createType39 = $Create.Nullable($$createType38);
+const $$createType40 = $models.OnlineMigrateItemResult.createFrom;
+const $$createType41 = $Create.Array($$createType40);
+const $$createType42 = $models.PushAllResult.createFrom;
+const $$createType43 = $Create.Array($$createType42);
+const $$createType44 = $models.ReleaseSyncResult.createFrom;
+const $$createType45 = $Create.Array($$createType44);

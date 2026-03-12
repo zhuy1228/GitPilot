@@ -18,9 +18,9 @@ tasks:
     cmds:
       - task: generate:syso
       - go build {{.BUILD_FLAGS}} -o {{.BIN_DIR}}/{{.APP_NAME}}.exe
-      - cmd: powershell Copy-Item config.yaml -Destination {{.BIN_DIR}}/config.yaml -Force
+      - cmd: powershell -Command "if (-not (Test-Path '{{.BIN_DIR}}/config.yaml')) { Copy-Item config.yaml -Destination '{{.BIN_DIR}}/config.yaml' }"
         platforms: [windows]
-      - cmd: cp config.yaml {{.BIN_DIR}}/config.yaml
+      - cmd: test -f {{.BIN_DIR}}/config.yaml || cp config.yaml {{.BIN_DIR}}/config.yaml
         platforms: [linux, darwin]
       - cmd: powershell Remove-item *.syso
         platforms: [windows]

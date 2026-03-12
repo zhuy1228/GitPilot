@@ -85,6 +85,17 @@ const newTagName = ref('')
 const newTagMessage = ref('')
 const createTagLoading = ref(false)
 
+// ---- Release 同步 ----
+const releases = ref([])
+const releasesLoading = ref(false)
+const selectedRelease = ref(null)
+const releaseSyncSource = ref('')
+const releaseSyncTarget = ref('')
+const releaseSyncLoading = ref(false)
+const releaseSyncResults = ref([])
+const releaseSrcToken = ref('')
+const releaseTgtToken = ref('')
+
 // ---- 分支管理 ----
 const newBranchName = ref('')
 const createBranchLoading = ref(false)
@@ -1256,7 +1267,56 @@ watch(activeTab, (tab) => {
   if (tab === 'tags' && !tags.value.length && !tagsLoading.value) {
     loadTags()
   }
+  if (tab === 'releases' && !releases.value.length && releaseSyncSource.value) {
+    loadReleases()
+  }
 })
+
+// ---- Release 同步 ----
+async function loadReleases() {
+  if (!props.project?.path || !releaseSyncSource.value) return
+  releasesLoading.value = true
+  selectedRelease.value = null
+  try {
+    const list = await AppService.GetRemoteReleases(props.project.path, releaseSyncSource.value, releaseSrcToken.value)
+    releases.value = Array.isArray(list) ? list : []
+  } catch (e) {
+    console.error('获取 Release 失败:', e)
+    releases.value = []
+    message.error('获取 Release 失败: ' + String(e))
+  } finally {
+    releasesLoading.value = false
+  }
+}
+
+async function doSyncReleases() {
+  if (!props.project?.path || !releaseSyncSource.value || !releaseSyncTarget.value) return
+  releaseSyncLoading.value = true
+  releaseSyncResults.value = []
+  try {
+    const results = await AppService.SyncReleases(props.project.path, releaseSyncSource.value, releaseSyncTarget.value, releaseSrcToken.value, releaseTgtToken.value)
+    releaseSyncResults.value = Array.isArray(results) ? results : []
+    const successCount = releaseSyncResults.value.filter(r => r.success).length
+    message.info(`Release 同步完成：${successCount}/${releaseSyncResults.value.length}`)
+  } catch (e) {
+    console.error('Release 同步失败:', e)
+    Modal.error({ title: 'Release 同步失败', content: String(e) })
+  } finally {
+    releaseSyncLoading.value = false
+  }
+}
+
+function formatFileSize(bytes) {
+  if (!bytes || bytes <= 0) return ''
+  const units = ['B', 'KB', 'MB', 'GB']
+  let i = 0
+  let size = bytes
+  while (size >= 1024 && i < units.length - 1) {
+    size /= 1024
+    i++
+  }
+  return size.toFixed(i === 0 ? 0 : 1) + ' ' + units[i]
+}
 
 // ---- Remote 远程仓库管理 ----
 async function switchRemote(remoteName) {
@@ -1548,6 +1608,9 @@ const currentRemoteUrl = computed(() => {
               </div>
               <div class="file-list-tab" :class="{ active: activeTab === 'tags' }" @click="activeTab = 'tags'">
                 <TagsOutlined /> 标签
+              </div>
+              <div class="file-list-tab" :class="{ active: activeTab === 'releases' }" @click="activeTab = 'releases'">
+                <DownloadOutlined /> 发布
               </div>
             </div>
 
@@ -1962,6 +2025,94 @@ const currentRemoteUrl = computed(() => {
                 </div>
               </div>
             </template>
+
+            <!-- ===== 发布同步面板 ===== -->
+            <template v-else-if="activeTab === 'releases'">
+              <div class="file-list-content tags-panel">
+                <!-- 源/目标 remote 选择 -->
+                <div style="padding: 8px 10px; border-bottom: 1px solid var(--border-color);">
+                  <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 6px;">
+                    <span style="font-size: 11px; color: var(--text-muted); width: 30px; flex-shrink: 0;">源</span>
+                    <a-select v-model:value="releaseSyncSource" size="small" style="flex: 1;" placeholder="源 remote">
+                      <a-select-option v-for="r in remotes" :key="r.name" :value="r.name">{{ r.name }}</a-select-option>
+                    </a-select>
+                    <a-button size="small" :loading="releasesLoading" @click="loadReleases" :disabled="!releaseSyncSource">
+                      <template #icon><ReloadOutlined /></template>
+                    </a-button>
+                  </div>
+                  <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 6px;">
+                    <span style="font-size: 11px; color: var(--text-muted); width: 30px; flex-shrink: 0;">目标</span>
+                    <a-select v-model:value="releaseSyncTarget" size="small" style="flex: 1;" placeholder="目标 remote">
+                      <a-select-option v-for="r in remotes" :key="r.name" :value="r.name" :disabled="r.name === releaseSyncSource">{{ r.name }}</a-select-option>
+                    </a-select>
+                    <a-button
+                      size="small"
+                      type="primary"
+                      :loading="releaseSyncLoading"
+                      :disabled="!releaseSyncSource || !releaseSyncTarget || releaseSyncSource === releaseSyncTarget"
+                      @click="doSyncReleases"
+                    >
+                      <template #icon><SyncOutlined /></template>
+                      同步
+                    </a-button>
+                  </div>
+                  <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 6px;">
+                    <span style="font-size: 11px; color: var(--text-muted); width: 30px; flex-shrink: 0;">认证</span>
+                    <a-input-password v-model:value="releaseSrcToken" size="small" style="flex: 1;" placeholder="源 Token（可选）" />
+                    <a-input-password v-model:value="releaseTgtToken" size="small" style="flex: 1;" placeholder="目标 Token（可选）" />
+                  </div>
+                </div>
+
+                <!-- Release 列表 -->
+                <div class="tag-list-section">
+                  <template v-if="releasesLoading">
+                    <div v-for="i in 4" :key="i" style="padding: 10px 12px;">
+                      <div style="height: 14px; background: var(--bg-hover, #333); border-radius: 4px; animation: pulse 1.5s infinite;" :style="{ width: (40 + i * 8) + '%' }"></div>
+                    </div>
+                  </template>
+                  <div v-else-if="!releases.length && releaseSyncSource" style="padding: 24px; text-align: center; color: var(--text-muted);">
+                    <DownloadOutlined :style="{ fontSize: '28px', marginBottom: '8px' }" />
+                    <div>暂无 Release</div>
+                  </div>
+                  <div v-else-if="!releaseSyncSource" style="padding: 24px; text-align: center; color: var(--text-muted);">
+                    <DownloadOutlined :style="{ fontSize: '28px', marginBottom: '8px' }" />
+                    <div>选择源 remote 以查看 Release</div>
+                  </div>
+                  <template v-else>
+                    <div
+                      v-for="rel in releases"
+                      :key="rel.tagName"
+                      class="tag-item"
+                      :class="{ active: selectedRelease?.tagName === rel.tagName }"
+                      @click="selectedRelease = rel"
+                    >
+                      <div class="tag-main-row">
+                        <TagOutlined class="tag-icon" />
+                        <span class="tag-name">{{ rel.name || rel.tagName }}</span>
+                        <a-tag v-if="rel.draft" size="small" color="orange">草稿</a-tag>
+                        <a-tag v-if="rel.prerelease" size="small" color="blue">预发布</a-tag>
+                        <a-badge v-if="rel.assets?.length" :count="rel.assets.length" :number-style="{ backgroundColor: 'var(--accent)', fontSize: '10px', height: '16px', lineHeight: '16px', minWidth: '16px', padding: '0 4px' }" />
+                      </div>
+                      <div class="tag-meta">
+                        <span class="tag-hash">{{ rel.tagName }}</span>
+                        <span v-if="rel.publishedAt || rel.createdAt" class="tag-time">{{ formatTime(rel.publishedAt || rel.createdAt) }}</span>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+
+                <!-- 同步结果 -->
+                <div v-if="releaseSyncResults.length" style="padding: 8px 10px; border-top: 1px solid var(--border-color);">
+                  <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">同步结果</div>
+                  <div v-for="r in releaseSyncResults" :key="r.tagName" style="display: flex; align-items: center; gap: 4px; padding: 2px 0; font-size: 11px;">
+                    <CheckCircleOutlined v-if="r.success" style="color: #a6e3a1; flex-shrink: 0;" />
+                    <CloseCircleOutlined v-else style="color: #f38ba8; flex-shrink: 0;" />
+                    <span style="font-weight: 500;">{{ r.tagName }}</span>
+                    <span style="color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.message }}</span>
+                  </div>
+                </div>
+              </div>
+            </template>
           </div>
 
           <!-- 拖拽分隔条 -->
@@ -2048,6 +2199,42 @@ const currentRemoteUrl = computed(() => {
                 <TagsOutlined :style="{ fontSize: '48px', color: 'var(--text-muted)', marginBottom: '8px' }" />
                 <span style="color: var(--text-muted)">在左侧管理项目标签</span>
                 <span style="color: var(--text-muted); font-size: 12px; margin-top: 4px;">共 {{ tags.length }} 个标签</span>
+              </div>
+            </template>
+            <!-- Release 详情模式 -->
+            <template v-else-if="activeTab === 'releases'">
+              <div v-if="selectedRelease" class="release-detail-panel">
+                <div class="release-detail-header">
+                  <h3 style="margin: 0; font-size: 16px;">{{ selectedRelease.name || selectedRelease.tagName }}</h3>
+                  <div style="display: flex; gap: 6px; margin-top: 4px;">
+                    <a-tag color="green">{{ selectedRelease.tagName }}</a-tag>
+                    <a-tag v-if="selectedRelease.draft" color="orange">草稿</a-tag>
+                    <a-tag v-if="selectedRelease.prerelease" color="blue">预发布</a-tag>
+                    <span v-if="selectedRelease.publishedAt || selectedRelease.createdAt" style="color: var(--text-muted); font-size: 12px; line-height: 22px;">
+                      {{ formatTime(selectedRelease.publishedAt || selectedRelease.createdAt) }}
+                    </span>
+                  </div>
+                </div>
+                <div v-if="selectedRelease.body" class="release-detail-body">
+                  <pre style="white-space: pre-wrap; font-size: 13px; line-height: 1.6; margin: 0; font-family: inherit;">{{ selectedRelease.body }}</pre>
+                </div>
+                <div v-if="selectedRelease.assets?.length" class="release-detail-assets">
+                  <div style="font-weight: 500; font-size: 13px; margin-bottom: 8px;">附件 ({{ selectedRelease.assets.length }})</div>
+                  <div
+                    v-for="asset in selectedRelease.assets"
+                    :key="asset.name"
+                    class="release-asset-item"
+                  >
+                    <DownloadOutlined style="color: var(--accent); flex-shrink: 0;" />
+                    <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ asset.name }}</span>
+                    <span style="color: var(--text-muted); font-size: 11px; flex-shrink: 0;">{{ formatFileSize(asset.size) }}</span>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="empty-state small">
+                <DownloadOutlined :style="{ fontSize: '48px', color: 'var(--text-muted)', marginBottom: '8px' }" />
+                <span style="color: var(--text-muted)">选择一个 Release 查看详情</span>
+                <span style="color: var(--text-muted); font-size: 12px; margin-top: 4px;">共 {{ releases.length }} 个 Release</span>
               </div>
             </template>
           </div>
@@ -3058,5 +3245,44 @@ const currentRemoteUrl = computed(() => {
   padding: 8px 10px;
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
+}
+
+/* Release 详情面板 */
+.release-detail-panel {
+  padding: 16px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.release-detail-header {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.release-detail-body {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--bg-secondary, #181825);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.release-detail-assets {
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.release-asset-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.release-asset-item:hover {
+  background: var(--bg-hover, #313244);
 }
 </style>

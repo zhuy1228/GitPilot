@@ -8,6 +8,7 @@ export {
 };
 
 export {
+    AssetInfo,
     BatchPullResult,
     BranchInfo,
     CommitFileInfo,
@@ -17,10 +18,17 @@ export {
     FileInfo,
     GitConfig,
     GitStatus,
+    MigrateOptions,
+    MigrateResult,
+    OnlineMigrateCompareResult,
+    OnlineMigrateItemResult,
     ProjectOverview,
     ProjectStatus,
     PushAllResult,
+    ReleaseInfo,
+    ReleaseSyncResult,
     RemoteItem,
+    RepoInfo,
     StashInfo,
     TagInfo,
     TreeNode

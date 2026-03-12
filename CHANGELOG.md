@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.4.1 (2026-03-12)
+
+### ✨ 新功能
+- **GitLab 平台支持**：新增 GitLab 作为第四个平台（GitHub / Gitee / Gitea / GitLab）
+  - 完整实现 PlatformAPI 全部 16 个接口方法（CreateRepo / ListRepos / ListReleases / CreateRelease / UploadAsset 等）
+  - 实现 7 个扩展迁移方法（Labels / Milestones / Issues / PullRequests）
+  - 前端新增 GitLab 图标、平台选择项、BaseURL 输入支持
+- **Release 同步 Token 输入**：同步发布时可手动输入源/目标 Token，不再依赖配置文件中的凭证
+
+### 🐛 Bug 修复
+- **凭证匹配修复**：自建平台（Gitea/GitLab）优先按 BaseURL 精确匹配，解决自建 GitLab 被误识别为 Gitea 的问题
+- **Gitea 迁移 API 修复**：`service` 字段从整数改为字符串，修复 HTTP 422 错误
+- **配置文件覆盖修复**：构建时仅在 `bin/config.yaml` 不存在时复制初始模板，避免每次 `wails3 dev` 丢失已有配置
+- **错误信息优化**：迁移相关错误信息显示实际 URL 而非推断的平台名
+
+### 🔨 改进
+- **智能迁移路径**：源平台开启代理时自动跳过 Gitea 原生迁移，改用本地代理中转（解决国内服务器无法访问 GitHub 的问题）
+- **推送超时优化**：在线迁移的 push 操作超时从 30 秒提升到 10 分钟
+- **大仓库推送**：设置 `http.postBuffer=500MB`，push --all 失败时自动回退为逐分支推送，避免 HTTP 413
+- **Git 操作**：新增 `RunWithProxyTimeout` 方法，支持自定义超时的 git 命令执行
+
+---
+
 ## v0.4.0 (2026-03-12)
 
 ### 🔧 架构重构

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, h } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, h } from 'vue'
 import {
   FolderOutlined,
   FolderOpenOutlined,
@@ -17,8 +17,11 @@ import {
   KeyOutlined,
   GroupOutlined,
   SwapOutlined,
+  ExportOutlined,
+  CloudSyncOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
+import { Events } from '@wailsio/runtime'
 import { AppService } from '../../bindings/github.com/zhuy1228/GitPilot/internal/app'
 
 const props = defineProps({
@@ -69,6 +72,34 @@ const batchResultMap = computed(() => {
 
 // 右键菜单
 const contextMenu = ref({ visible: false, x: 0, y: 0, type: '', data: {} })
+
+// ---- 迁移操作 ----
+const showMigrateModal = ref(false)
+const migrateLoading = ref(false)
+const migrateForm = ref({ targetPlatform: '', targetUsername: '', description: '', private: false })
+const selectedMigratePaths = ref([])
+const migrateResults = ref([])
+const migrateCredentials = ref([])
+const migrateResultMap = computed(() => {
+  const map = {}
+  migrateResults.value.forEach(r => { map[r.path] = r })
+  return map
+})
+
+// ---- 在线迁移 ----
+const showOnlineMigrateModal = ref(false)
+const onlineMigrateStep = ref('form') // form | compare | execute
+const onlineMigrateSrc = ref({ platform: '', baseUrl: '', username: '', token: '', useProxy: false })
+const onlineMigrateTgt = ref({ platform: '', baseUrl: '', username: '', token: '', useProxy: false })
+const onlineCompareResult = ref({ sourceRepos: [], targetRepos: [], missingRepos: [] })
+const selectedOnlineRepos = ref([])
+const onlineCompareLoading = ref(false)
+const onlineMigrateLoading = ref(false)
+const onlineMigrateResults = ref([])
+const onlineMigrateCredentials = ref([])
+const migrateOpts = ref({ labels: true, issues: true, pullRequests: true, releases: true, milestones: true })
+const migrateProgress = ref({ current: 0, total: 0, repoName: '', phase: '', percent: 0, message: '' })
+let migrateProgressUnsubscribe = null
 
 // 获取所有分组名（用于下拉选择）
 const groupNames = computed(() => {
@@ -474,11 +505,211 @@ async function doBatchPush() {
   }
 }
 
+// ---- 迁移功能 ----
+async function openMigrateModal() {
+  showMigrateModal.value = true
+  migrateResults.value = []
+  migrateForm.value = { targetPlatform: '', targetUsername: '', description: '', private: false }
+  // 加载凭证和项目概览
+  try {
+    const creds = await AppService.GetCredentials()
+    migrateCredentials.value = Array.isArray(creds) ? creds.filter(c => c.token) : []
+  } catch (e) {
+    migrateCredentials.value = []
+  }
+  // 复用 batch overview
+  if (!batchOverviews.value.length) {
+    await loadBatchOverview()
+  }
+  selectedMigratePaths.value = batchOverviews.value
+    .filter(p => !p.error)
+    .map(p => p.path)
+}
+
+function toggleMigratePath(path) {
+  const idx = selectedMigratePaths.value.indexOf(path)
+  if (idx >= 0) {
+    selectedMigratePaths.value = selectedMigratePaths.value.filter(p => p !== path)
+  } else {
+    selectedMigratePaths.value = [...selectedMigratePaths.value, path]
+  }
+}
+
+function toggleAllMigratePaths(e) {
+  if (e.target.checked) {
+    selectedMigratePaths.value = batchOverviews.value
+      .filter(p => !p.error)
+      .map(p => p.path)
+  } else {
+    selectedMigratePaths.value = []
+  }
+}
+
+// 选择凭证后自动填充 platform + username
+function onMigrateCredentialChange(val) {
+  const parts = val.split('/')
+  migrateForm.value.targetPlatform = parts[0]
+  migrateForm.value.targetUsername = parts.slice(1).join('/')
+}
+
+async function doMigrate() {
+  if (!selectedMigratePaths.value.length) {
+    message.warning('请选择要迁移的项目')
+    return
+  }
+  if (!migrateForm.value.targetPlatform || !migrateForm.value.targetUsername) {
+    message.warning('请选择目标凭证')
+    return
+  }
+  migrateLoading.value = true
+  try {
+    const results = await AppService.BatchMigrateProjects(
+      selectedMigratePaths.value,
+      migrateForm.value.targetPlatform,
+      migrateForm.value.targetUsername,
+      migrateForm.value.description,
+      migrateForm.value.private
+    )
+    migrateResults.value = Array.isArray(results) ? results : []
+    const successCount = migrateResults.value.filter(r => r.success).length
+    message.info(`迁移完成：${successCount}/${migrateResults.value.length} 成功`)
+    await loadTree()
+  } catch (e) {
+    Modal.error({ title: '迁移失败', content: String(e) })
+  } finally {
+    migrateLoading.value = false
+  }
+}
+
+// ---- 在线迁移功能 ----
+async function openOnlineMigrateModal() {
+  showOnlineMigrateModal.value = true
+  onlineMigrateStep.value = 'form'
+  onlineMigrateSrc.value = { platform: '', baseUrl: '', username: '', token: '', useProxy: false }
+  onlineMigrateTgt.value = { platform: '', baseUrl: '', username: '', token: '', useProxy: false }
+  onlineCompareResult.value = { sourceRepos: [], targetRepos: [], missingRepos: [] }
+  selectedOnlineRepos.value = []
+  onlineMigrateResults.value = []
+  migrateProgress.value = { current: 0, total: 0, repoName: '', phase: '', percent: 0, message: '' }
+  // 监听迁移进度事件
+  if (migrateProgressUnsubscribe) migrateProgressUnsubscribe()
+  migrateProgressUnsubscribe = Events.On('online-migrate-progress', (event) => {
+    const data = event.data?.[0] || event.data
+    if (data) {
+      migrateProgress.value = data
+    }
+  })
+  // 加载凭证列表用于快捷选择
+  try {
+    const creds = await AppService.GetCredentials()
+    onlineMigrateCredentials.value = Array.isArray(creds) ? creds.filter(c => c.token) : []
+  } catch (e) {
+    onlineMigrateCredentials.value = []
+  }
+}
+
+function onOnlineSrcCredentialChange(val) {
+  const cred = onlineMigrateCredentials.value.find(c => (c.platform + '/' + c.username) === val)
+  if (cred) {
+    onlineMigrateSrc.value.platform = cred.platform
+    onlineMigrateSrc.value.baseUrl = cred.baseUrl || ''
+    onlineMigrateSrc.value.username = cred.username
+    onlineMigrateSrc.value.token = cred.token || ''
+  }
+}
+
+function onOnlineTgtCredentialChange(val) {
+  const cred = onlineMigrateCredentials.value.find(c => (c.platform + '/' + c.username) === val)
+  if (cred) {
+    onlineMigrateTgt.value.platform = cred.platform
+    onlineMigrateTgt.value.baseUrl = cred.baseUrl || ''
+    onlineMigrateTgt.value.username = cred.username
+    onlineMigrateTgt.value.token = cred.token || ''
+  }
+}
+
+async function doOnlineCompare() {
+  const src = onlineMigrateSrc.value
+  const tgt = onlineMigrateTgt.value
+  if (!src.platform || !src.username || !src.token) {
+    message.warning('请填写完整的源平台信息')
+    return
+  }
+  if (!tgt.platform || !tgt.username || !tgt.token) {
+    message.warning('请填写完整的目标平台信息')
+    return
+  }
+  onlineCompareLoading.value = true
+  try {
+    const result = await AppService.OnlineMigrateCompare(
+      src.platform, src.baseUrl, src.username, src.token,
+      tgt.platform, tgt.baseUrl, tgt.username, tgt.token
+    )
+    onlineCompareResult.value = result || { sourceRepos: [], targetRepos: [], missingRepos: [] }
+    // 默认全选缺少的仓库
+    selectedOnlineRepos.value = (onlineCompareResult.value.missingRepos || []).map(r => r.name)
+    onlineMigrateStep.value = 'compare'
+    if (!onlineCompareResult.value.missingRepos?.length) {
+      message.success('目标平台已拥有所有仓库，无需迁移')
+    }
+  } catch (e) {
+    Modal.error({ title: '对比失败', content: String(e) })
+  } finally {
+    onlineCompareLoading.value = false
+  }
+}
+
+function toggleOnlineRepo(name) {
+  const idx = selectedOnlineRepos.value.indexOf(name)
+  if (idx >= 0) {
+    selectedOnlineRepos.value = selectedOnlineRepos.value.filter(n => n !== name)
+  } else {
+    selectedOnlineRepos.value = [...selectedOnlineRepos.value, name]
+  }
+}
+
+function toggleAllOnlineRepos(e) {
+  if (e.target.checked) {
+    selectedOnlineRepos.value = (onlineCompareResult.value.missingRepos || []).map(r => r.name)
+  } else {
+    selectedOnlineRepos.value = []
+  }
+}
+
+async function doOnlineMigrateExecute() {
+  if (!selectedOnlineRepos.value.length) {
+    message.warning('请选择要迁移的仓库')
+    return
+  }
+  const src = onlineMigrateSrc.value
+  const tgt = onlineMigrateTgt.value
+  onlineMigrateLoading.value = true
+  onlineMigrateStep.value = 'execute'
+  try {
+    const results = await AppService.OnlineMigrateExecute(
+      src.platform, src.baseUrl, src.username, src.token,
+      tgt.platform, tgt.baseUrl, tgt.username, tgt.token,
+      selectedOnlineRepos.value,
+      src.useProxy,
+      tgt.useProxy,
+      migrateOpts.value
+    )
+    onlineMigrateResults.value = Array.isArray(results) ? results : []
+    const successCount = onlineMigrateResults.value.filter(r => r.success).length
+    message.info(`在线迁移完成：${successCount}/${onlineMigrateResults.value.length} 成功`)
+  } catch (e) {
+    Modal.error({ title: '在线迁移失败', content: String(e) })
+  } finally {
+    onlineMigrateLoading.value = false
+  }
+}
+
 // 分组图标
 const groupIcons = {
   github: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>`,
   gitee: `<svg viewBox="0 0 1024 1024" fill="currentColor"><path d="M512 1024C229.222 1024 0 794.778 0 512S229.222 0 512 0s512 229.222 512 512-229.222 512-512 512z m259.149-568.883h-290.74a25.293 25.293 0 0 0-25.292 25.293l-0.026 63.206c0 13.952 11.315 25.293 25.267 25.293h177.024c13.978 0 25.293 11.315 25.293 25.267v12.646a75.853 75.853 0 0 1-75.853 75.853h-240.23a25.293 25.293 0 0 1-25.267-25.293V417.203a75.853 75.853 0 0 1 75.827-75.853h353.946a25.293 25.293 0 0 0 25.267-25.292l0.077-63.207a25.293 25.293 0 0 0-25.268-25.293H417.152a189.62 189.62 0 0 0-189.62 189.645V771.15c0 13.977 11.316 25.293 25.294 25.293h372.94a170.65 170.65 0 0 0 170.65-170.65V480.384a25.293 25.293 0 0 0-25.293-25.267z"/></svg>`,
   gitea: `<svg viewBox="0 0 640 640" fill="currentColor"><path d="M395.022 297.778c-13.158 0-23.822 10.664-23.822 23.822s10.664 23.822 23.822 23.822 23.822-10.664 23.822-23.822-10.664-23.822-23.822-23.822zM243.2 297.778c-13.158 0-23.822 10.664-23.822 23.822s10.664 23.822 23.822 23.822 23.822-10.664 23.822-23.822-10.664-23.822-23.822-23.822zM319.111 22.756C158.578 22.756 28.444 152.889 28.444 313.422s130.133 290.667 290.667 290.667 290.667-130.133 290.667-290.667S479.644 22.756 319.111 22.756zm165.689 361.244c0 5.333-0.711 10.667-1.778 15.644-20.267 93.867-148.089 167.111-305.067 167.111a360.604 360.604 0 0 1-65.778-5.689c-21.333 18.133-56.889 37.689-101.333 49.422-7.822 2.133-16 3.911-24.889 5.333h-0.711c-4.267 0-7.822-3.556-8.889-7.822v-0.356c-1.067-4.622 2.133-7.467 4.978-10.667 17.067-18.844 36.622-34.844 48-71.467-51.911-36.267-83.911-85.067-83.911-139.733 0-106.311 107.378-192.356 239.644-192.356 118.4 0 220.089 68.267 238.578 160.356 1.778 6.4 3.556 14.578 3.556 22.4-0.356 2.489-0.356 5.333-0.356 7.822z"/></svg>`,
+  gitlab: `<svg viewBox="0 0 512 512" fill="currentColor"><path d="M494.07 281.6l-25.18-78.08-49.71-153.87a11.68 11.68 0 0 0-22.2 0l-49.71 153.87H164.73L115.02 49.65a11.68 11.68 0 0 0-22.2 0L43.11 203.52 17.93 281.6a23.4 23.4 0 0 0 8.49 26.14L256 493.49l229.58-185.75a23.4 23.4 0 0 0 8.49-26.14z"/></svg>`,
 }
 
 function getGroupIcon(icon) {
@@ -488,6 +719,10 @@ function getGroupIcon(icon) {
 onMounted(() => {
   loadTree()
 })
+
+onBeforeUnmount(() => {
+  if (migrateProgressUnsubscribe) migrateProgressUnsubscribe()
+})
 </script>
 
 <template>
@@ -495,6 +730,12 @@ onMounted(() => {
     <div class="sidebar-header">
       <span class="logo">GitPilot</span>
       <a-space :size="0">
+        <a-button type="text" size="small" @click="openOnlineMigrateModal" title="在线迁移">
+          <template #icon><CloudSyncOutlined /></template>
+        </a-button>
+        <a-button type="text" size="small" @click="openMigrateModal" title="迁移项目">
+          <template #icon><ExportOutlined /></template>
+        </a-button>
         <a-button type="text" size="small" @click="openBatchModal" title="批量操作">
           <template #icon><AppstoreOutlined /></template>
         </a-button>
@@ -650,6 +891,7 @@ onMounted(() => {
             <a-select-option value="github">🐙 GitHub</a-select-option>
             <a-select-option value="gitee">🟠 Gitee</a-select-option>
             <a-select-option value="gitea">🍵 Gitea</a-select-option>
+            <a-select-option value="gitlab">🦊 GitLab</a-select-option>
           </a-select>
         </a-form-item>
       </a-form>
@@ -810,6 +1052,379 @@ onMounted(() => {
               </div>
             </div>
           </template>
+        </div>
+      </div>
+    </a-modal>
+
+    <!-- 迁移弹窗 -->
+    <a-modal
+      v-model:open="showMigrateModal"
+      title="迁移项目到其他平台"
+      :width="640"
+      :footer="null"
+    >
+      <div class="batch-panel">
+        <!-- 目标凭证选择 -->
+        <div style="margin-bottom: 12px;">
+          <div style="margin-bottom: 6px; font-size: 12px; color: var(--text-muted);">目标平台凭证</div>
+          <a-select
+            style="width: 100%"
+            placeholder="选择目标平台凭证（需要 Token）"
+            @change="onMigrateCredentialChange"
+          >
+            <a-select-option
+              v-for="c in migrateCredentials"
+              :key="c.platform + '/' + c.username"
+              :value="c.platform + '/' + c.username"
+            >
+              {{ c.platform }} / {{ c.username }}
+              <span v-if="c.baseUrl" style="color: var(--text-muted); font-size: 11px;"> ({{ c.baseUrl }})</span>
+            </a-select-option>
+          </a-select>
+        </div>
+        <div style="margin-bottom: 12px; display: flex; gap: 8px;">
+          <div style="flex: 1;">
+            <div style="margin-bottom: 4px; font-size: 12px; color: var(--text-muted);">仓库描述（可选）</div>
+            <a-input v-model:value="migrateForm.description" placeholder="仓库描述" size="small" />
+          </div>
+          <div style="display: flex; align-items: flex-end;">
+            <a-checkbox v-model:checked="migrateForm.private">私有</a-checkbox>
+          </div>
+        </div>
+
+        <!-- 项目列表 -->
+        <div class="batch-header">
+          <a-checkbox
+            :checked="selectedMigratePaths.length === batchOverviews.filter(p => !p.error).length && batchOverviews.length > 0"
+            :indeterminate="selectedMigratePaths.length > 0 && selectedMigratePaths.length < batchOverviews.filter(p => !p.error).length"
+            @change="toggleAllMigratePaths"
+          >
+            全选 ({{ selectedMigratePaths.length }}/{{ batchOverviews.filter(p => !p.error).length }})
+          </a-checkbox>
+          <span style="flex:1"></span>
+          <a-button
+            type="primary"
+            size="small"
+            :loading="migrateLoading"
+            :disabled="!selectedMigratePaths.length || !migrateForm.targetPlatform"
+            @click="doMigrate"
+          >
+            <template #icon><ExportOutlined /></template>
+            开始迁移
+          </a-button>
+        </div>
+        <div class="batch-list">
+          <div v-if="!batchOverviews.length" style="padding: 24px; text-align: center; color: var(--text-muted);">
+            暂无项目
+          </div>
+          <template v-else>
+            <div
+              v-for="proj in batchOverviews"
+              :key="'mig-' + proj.key"
+              class="batch-item"
+              :class="{ error: !!proj.error }"
+            >
+              <a-checkbox
+                :checked="selectedMigratePaths.includes(proj.path)"
+                :disabled="!!proj.error"
+                @change="toggleMigratePath(proj.path)"
+                style="flex-shrink: 0;"
+              />
+              <div class="batch-item-info">
+                <div class="batch-item-name">{{ proj.name }}</div>
+                <div class="batch-item-meta">
+                  <a-tag v-if="proj.branch" size="small" color="green">
+                    <BranchesOutlined /> {{ proj.branch }}
+                  </a-tag>
+                  <span v-if="proj.error" style="color: #f38ba8; font-size: 11px;">{{ proj.error }}</span>
+                </div>
+              </div>
+              <div v-if="migrateResultMap[proj.path]" class="batch-result-icon">
+                <CheckCircleOutlined v-if="migrateResultMap[proj.path].success" style="color: #a6e3a1;" />
+                <a-tooltip v-else :title="migrateResultMap[proj.path].message">
+                  <CloseCircleOutlined style="color: #f38ba8;" />
+                </a-tooltip>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- 迁移结果 -->
+        <div v-if="migrateResults.length" style="margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 8px;">
+          <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">迁移结果</div>
+          <div v-for="r in migrateResults" :key="r.path" style="display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 12px;">
+            <CheckCircleOutlined v-if="r.success" style="color: #a6e3a1;" />
+            <CloseCircleOutlined v-else style="color: #f38ba8;" />
+            <span>{{ r.name || r.path }}</span>
+            <span style="color: var(--text-muted);">{{ r.message }}</span>
+            <a v-if="r.cloneUrl" :href="r.cloneUrl" target="_blank" style="font-size: 11px; color: var(--accent);">{{ r.cloneUrl }}</a>
+          </div>
+        </div>
+      </div>
+    </a-modal>
+
+    <!-- 在线迁移弹窗 -->
+    <a-modal
+      v-model:open="showOnlineMigrateModal"
+      title="在线迁移"
+      :width="720"
+      :footer="null"
+      :maskClosable="!onlineCompareLoading && !onlineMigrateLoading"
+      :closable="!onlineCompareLoading && !onlineMigrateLoading"
+    >
+      <!-- 步骤条 -->
+      <a-steps :current="onlineMigrateStep === 'form' ? 0 : onlineMigrateStep === 'compare' ? 1 : 2" size="small" style="margin-bottom: 16px;">
+        <a-step title="配置平台" />
+        <a-step title="对比仓库" />
+        <a-step title="迁移结果" />
+      </a-steps>
+
+      <!-- Step 1: 配置平台 -->
+      <div v-if="onlineMigrateStep === 'form'">
+        <div class="online-migrate-platforms">
+          <!-- 源平台 -->
+          <div class="online-migrate-platform-card">
+            <div class="platform-card-title">📤 源平台</div>
+            <a-form layout="vertical" size="small">
+              <a-form-item label="快捷选择凭证">
+                <a-select
+                  placeholder="选择已保存的凭证"
+                  allow-clear
+                  @change="onOnlineSrcCredentialChange"
+                  style="width: 100%"
+                >
+                  <a-select-option
+                    v-for="c in onlineMigrateCredentials"
+                    :key="'src-' + c.platform + '/' + c.username"
+                    :value="c.platform + '/' + c.username"
+                  >
+                    {{ c.platform }} / {{ c.username }}
+                  </a-select-option>
+                </a-select>
+              </a-form-item>
+              <a-form-item label="平台" required>
+                <a-select v-model:value="onlineMigrateSrc.platform" placeholder="选择平台">
+                  <a-select-option value="github">GitHub</a-select-option>
+                  <a-select-option value="gitee">Gitee</a-select-option>
+                  <a-select-option value="gitea">Gitea</a-select-option>
+                  <a-select-option value="gitlab">GitLab</a-select-option>
+                </a-select>
+              </a-form-item>
+              <a-form-item v-if="onlineMigrateSrc.platform === 'gitea' || onlineMigrateSrc.platform === 'gitlab'" label="Base URL" required>
+                <a-input v-model:value="onlineMigrateSrc.baseUrl" placeholder="http://192.168.1.10:3000" />
+              </a-form-item>
+              <a-form-item label="用户名" required>
+                <a-input v-model:value="onlineMigrateSrc.username" placeholder="用户名" />
+              </a-form-item>
+              <a-form-item label="Token" required>
+                <a-input-password v-model:value="onlineMigrateSrc.token" placeholder="API Token" />
+              </a-form-item>
+              <a-form-item>
+                <a-checkbox v-model:checked="onlineMigrateSrc.useProxy">使用代理</a-checkbox>
+              </a-form-item>
+            </a-form>
+          </div>
+
+          <!-- 箭头 -->
+          <div class="online-migrate-arrow">
+            <SwapOutlined style="font-size: 24px; color: var(--accent);" />
+          </div>
+
+          <!-- 目标平台 -->
+          <div class="online-migrate-platform-card">
+            <div class="platform-card-title">📥 目标平台</div>
+            <a-form layout="vertical" size="small">
+              <a-form-item label="快捷选择凭证">
+                <a-select
+                  placeholder="选择已保存的凭证"
+                  allow-clear
+                  @change="onOnlineTgtCredentialChange"
+                  style="width: 100%"
+                >
+                  <a-select-option
+                    v-for="c in onlineMigrateCredentials"
+                    :key="'tgt-' + c.platform + '/' + c.username"
+                    :value="c.platform + '/' + c.username"
+                  >
+                    {{ c.platform }} / {{ c.username }}
+                  </a-select-option>
+                </a-select>
+              </a-form-item>
+              <a-form-item label="平台" required>
+                <a-select v-model:value="onlineMigrateTgt.platform" placeholder="选择平台">
+                  <a-select-option value="github">GitHub</a-select-option>
+                  <a-select-option value="gitee">Gitee</a-select-option>
+                  <a-select-option value="gitea">Gitea</a-select-option>
+                  <a-select-option value="gitlab">GitLab</a-select-option>
+                </a-select>
+              </a-form-item>
+              <a-form-item v-if="onlineMigrateTgt.platform === 'gitea' || onlineMigrateTgt.platform === 'gitlab'" label="Base URL" required>
+                <a-input v-model:value="onlineMigrateTgt.baseUrl" placeholder="http://192.168.1.10:3000" />
+              </a-form-item>
+              <a-form-item label="用户名" required>
+                <a-input v-model:value="onlineMigrateTgt.username" placeholder="用户名" />
+              </a-form-item>
+              <a-form-item label="Token" required>
+                <a-input-password v-model:value="onlineMigrateTgt.token" placeholder="API Token" />
+              </a-form-item>
+              <a-form-item>
+                <a-checkbox v-model:checked="onlineMigrateTgt.useProxy">使用代理</a-checkbox>
+              </a-form-item>
+            </a-form>
+          </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 16px;">
+          <a-button
+            type="primary"
+            :loading="onlineCompareLoading"
+            :disabled="!onlineMigrateSrc.platform || !onlineMigrateSrc.username || !onlineMigrateSrc.token || !onlineMigrateTgt.platform || !onlineMigrateTgt.username || !onlineMigrateTgt.token"
+            @click="doOnlineCompare"
+          >
+            <template #icon><SyncOutlined /></template>
+            开始对比
+          </a-button>
+        </div>
+      </div>
+
+      <!-- Step 2: 对比结果 -->
+      <div v-else-if="onlineMigrateStep === 'compare'">
+        <!-- 统计信息 -->
+        <div class="online-migrate-stats">
+          <a-tag color="blue">源平台: {{ onlineCompareResult.sourceRepos?.length || 0 }} 个仓库</a-tag>
+          <a-tag color="green">目标平台: {{ onlineCompareResult.targetRepos?.length || 0 }} 个仓库</a-tag>
+          <a-tag color="orange">需迁移: {{ onlineCompareResult.missingRepos?.length || 0 }} 个仓库</a-tag>
+        </div>
+
+        <!-- 缺少仓库列表 -->
+        <div v-if="onlineCompareResult.missingRepos?.length" class="batch-panel">
+          <div class="batch-header">
+            <a-checkbox
+              :checked="selectedOnlineRepos.length === onlineCompareResult.missingRepos.length"
+              :indeterminate="selectedOnlineRepos.length > 0 && selectedOnlineRepos.length < onlineCompareResult.missingRepos.length"
+              @change="toggleAllOnlineRepos"
+            >
+              全选 ({{ selectedOnlineRepos.length }}/{{ onlineCompareResult.missingRepos.length }})
+            </a-checkbox>
+          </div>
+          <div class="batch-list" style="max-height: 340px;">
+            <div
+              v-for="repo in onlineCompareResult.missingRepos"
+              :key="repo.name"
+              class="batch-item"
+            >
+              <a-checkbox
+                :checked="selectedOnlineRepos.includes(repo.name)"
+                @change="toggleOnlineRepo(repo.name)"
+                style="flex-shrink: 0;"
+              />
+              <div class="batch-item-info">
+                <div class="batch-item-name">{{ repo.name }}</div>
+                <div class="batch-item-meta">
+                  <span v-if="repo.description" style="font-size: 11px; color: var(--text-muted);">{{ repo.description }}</span>
+                  <a-tag v-if="repo.private" size="small" color="red">私有</a-tag>
+                  <a-tag v-if="repo.fork" size="small" color="purple">Fork</a-tag>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-else style="padding: 32px; text-align: center; color: var(--text-muted);">
+          ✅ 目标平台已包含所有仓库，无需迁移
+        </div>
+
+        <!-- 迁移选项 -->
+        <div v-if="onlineCompareResult.missingRepos?.length" class="migrate-options-section">
+          <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">迁移选项（除代码外，还同步以下内容）</div>
+          <div class="migrate-options-grid">
+            <a-checkbox v-model:checked="migrateOpts.labels">🏷️ 标签</a-checkbox>
+            <a-checkbox v-model:checked="migrateOpts.milestones">🎯 里程碑</a-checkbox>
+            <a-checkbox v-model:checked="migrateOpts.issues">📋 工单</a-checkbox>
+            <a-checkbox v-model:checked="migrateOpts.releases">📦 发布</a-checkbox>
+            <a-checkbox v-model:checked="migrateOpts.pullRequests">🔀 合并请求</a-checkbox>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; margin-top: 16px;">
+          <a-button @click="onlineMigrateStep = 'form'">
+            返回修改
+          </a-button>
+          <a-button
+            type="primary"
+            :disabled="!selectedOnlineRepos.length"
+            :loading="onlineMigrateLoading"
+            @click="doOnlineMigrateExecute"
+          >
+            <template #icon><ExportOutlined /></template>
+            开始迁移 ({{ selectedOnlineRepos.length }})
+          </a-button>
+        </div>
+      </div>
+
+      <!-- Step 3: 迁移结果 -->
+      <div v-else-if="onlineMigrateStep === 'execute'">
+        <!-- 进度条 -->
+        <div v-if="onlineMigrateLoading" class="migrate-progress-section">
+          <a-progress
+            :percent="Math.round(migrateProgress.percent)"
+            :status="migrateProgress.phase === 'error' ? 'exception' : 'active'"
+            :stroke-color="{ from: '#89b4fa', to: '#a6e3a1' }"
+            style="margin-bottom: 12px;"
+          />
+          <div class="migrate-progress-info">
+            <div class="migrate-progress-repo">
+              <LoadingOutlined style="margin-right: 6px; color: var(--accent);" />
+              <span>{{ migrateProgress.repoName || '准备中...' }}</span>
+              <a-tag v-if="migrateProgress.current && migrateProgress.total" size="small" style="margin-left: 8px;">
+                {{ migrateProgress.current }}/{{ migrateProgress.total }}
+              </a-tag>
+            </div>
+            <div class="migrate-progress-phase">
+              <a-tag v-if="migrateProgress.phase === 'clone'" color="blue">克隆中</a-tag>
+              <a-tag v-else-if="migrateProgress.phase === 'create'" color="cyan">创建仓库</a-tag>
+              <a-tag v-else-if="migrateProgress.phase === 'push'" color="green">推送中</a-tag>
+              <a-tag v-else-if="migrateProgress.phase === 'labels'" color="orange">迁移标签</a-tag>
+              <a-tag v-else-if="migrateProgress.phase === 'milestones'" color="purple">迁移里程碑</a-tag>
+              <a-tag v-else-if="migrateProgress.phase === 'issues'" color="geekblue">迁移工单</a-tag>
+              <a-tag v-else-if="migrateProgress.phase === 'releases'" color="magenta">迁移发布</a-tag>
+              <a-tag v-else-if="migrateProgress.phase === 'pullRequests'" color="volcano">迁移合并请求</a-tag>
+              <a-tag v-else-if="migrateProgress.phase" color="default">{{ migrateProgress.phase }}</a-tag>
+            </div>
+            <div class="migrate-progress-message">{{ migrateProgress.message }}</div>
+          </div>
+        </div>
+        <div v-else>
+          <div class="online-migrate-stats" style="margin-bottom: 12px;">
+            <a-tag color="green">成功: {{ onlineMigrateResults.filter(r => r.success).length }}</a-tag>
+            <a-tag color="red">失败: {{ onlineMigrateResults.filter(r => !r.success).length }}</a-tag>
+          </div>
+          <div class="batch-list" style="max-height: 400px;">
+            <div
+              v-for="r in onlineMigrateResults"
+              :key="r.name"
+              class="batch-item"
+            >
+              <div class="batch-result-icon">
+                <CheckCircleOutlined v-if="r.success" style="color: #a6e3a1;" />
+                <CloseCircleOutlined v-else style="color: #f38ba8;" />
+              </div>
+              <div class="batch-item-info">
+                <div class="batch-item-name">{{ r.name }}</div>
+                <div class="batch-item-meta">
+                  <span style="font-size: 11px; color: var(--text-muted);">{{ r.message }}</span>
+                  <a v-if="r.cloneUrl" :href="r.cloneUrl" target="_blank" style="font-size: 11px; color: var(--accent);">{{ r.cloneUrl }}</a>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-top: 16px;">
+            <a-button @click="onlineMigrateStep = 'form'">
+              重新配置
+            </a-button>
+            <a-button type="primary" @click="showOnlineMigrateModal = false">
+              完成
+            </a-button>
+          </div>
         </div>
       </div>
     </a-modal>
@@ -1043,5 +1658,86 @@ onMounted(() => {
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 2px;
+}
+
+/* 在线迁移 */
+.online-migrate-platforms {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.online-migrate-platform-card {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-hover, rgba(255,255,255,0.04));
+  border-radius: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-color, #313244);
+}
+
+.platform-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: var(--text-primary);
+}
+
+.online-migrate-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 100px;
+  flex-shrink: 0;
+}
+
+.online-migrate-stats {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+/* 迁移选项 */
+.migrate-options-section {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--bg-hover, rgba(255,255,255,0.04));
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #313244);
+}
+
+.migrate-options-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+}
+
+/* 迁移进度 */
+.migrate-progress-section {
+  padding: 16px 0;
+}
+
+.migrate-progress-info {
+  margin-top: 8px;
+}
+
+.migrate-progress-repo {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.migrate-progress-phase {
+  margin-bottom: 6px;
+}
+
+.migrate-progress-message {
+  font-size: 12px;
+  color: var(--text-muted);
+  word-break: break-all;
 }
 </style>
