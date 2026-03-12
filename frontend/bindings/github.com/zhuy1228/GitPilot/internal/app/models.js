@@ -239,6 +239,58 @@ export class ConflictFileInfo {
 }
 
 /**
+ * CredentialInfo 凭证信息（前端展示用）
+ */
+export class CredentialInfo {
+    /**
+     * Creates a new CredentialInfo instance.
+     * @param {Partial<CredentialInfo>} [$$source = {}] - The source object to create the CredentialInfo.
+     */
+    constructor($$source = {}) {
+        if (!("platform" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["platform"] = "";
+        }
+        if (!("baseUrl" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["baseUrl"] = "";
+        }
+        if (!("username" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["username"] = "";
+        }
+        if (!("token" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["token"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CredentialInfo instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {CredentialInfo}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CredentialInfo(/** @type {Partial<CredentialInfo>} */($$parsedSource));
+    }
+}
+
+/**
  * FileInfo 文件信息
  */
 export class FileInfo {
@@ -374,44 +426,6 @@ export class GitStatus {
 }
 
 /**
- * PlatformInfo 平台信息
- */
-export class PlatformInfo {
-    /**
-     * Creates a new PlatformInfo instance.
-     * @param {Partial<PlatformInfo>} [$$source = {}] - The source object to create the PlatformInfo.
-     */
-    constructor($$source = {}) {
-        if (!("name" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["name"] = "";
-        }
-        if (!("baseUrl" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["baseUrl"] = "";
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new PlatformInfo instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {PlatformInfo}
-     */
-    static createFrom($$source = {}) {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new PlatformInfo(/** @type {Partial<PlatformInfo>} */($$parsedSource));
-    }
-}
-
-/**
  * ProjectOverview 项目概览信息（轻量级）
  */
 export class ProjectOverview {
@@ -528,6 +542,14 @@ export class ProjectStatus {
              */
             this["changedFiles"] = [];
         }
+        if (!("useProxy" in $$source)) {
+            /**
+             * nil=跟随全局, true=开启, false=关闭
+             * @member
+             * @type {boolean | null}
+             */
+            this["useProxy"] = null;
+        }
 
         Object.assign(this, $$source);
     }
@@ -548,6 +570,51 @@ export class ProjectStatus {
             $$parsedSource["changedFiles"] = $$createField4_0($$parsedSource["changedFiles"]);
         }
         return new ProjectStatus(/** @type {Partial<ProjectStatus>} */($$parsedSource));
+    }
+}
+
+/**
+ * PushAllResult 一键多端推送结果
+ */
+export class PushAllResult {
+    /**
+     * Creates a new PushAllResult instance.
+     * @param {Partial<PushAllResult>} [$$source = {}] - The source object to create the PushAllResult.
+     */
+    constructor($$source = {}) {
+        if (!("remote" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["remote"] = "";
+        }
+        if (!("success" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["success"] = false;
+        }
+        if (!("message" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["message"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PushAllResult instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {PushAllResult}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PushAllResult(/** @type {Partial<PushAllResult>} */($$parsedSource));
     }
 }
 
@@ -718,7 +785,7 @@ export class TreeNode {
         }
         if (!("type" in $$source)) {
             /**
-             * platform, user, project
+             * group, project
              * @member
              * @type {string}
              */
@@ -730,6 +797,13 @@ export class TreeNode {
              * @type {string | undefined}
              */
             this["path"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["icon"] = undefined;
         }
         if (/** @type {any} */(false)) {
             /**
@@ -748,50 +822,12 @@ export class TreeNode {
      * @returns {TreeNode}
      */
     static createFrom($$source = {}) {
-        const $$createField4_0 = $$createType5;
+        const $$createField5_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("children" in $$parsedSource) {
-            $$parsedSource["children"] = $$createField4_0($$parsedSource["children"]);
+            $$parsedSource["children"] = $$createField5_0($$parsedSource["children"]);
         }
         return new TreeNode(/** @type {Partial<TreeNode>} */($$parsedSource));
-    }
-}
-
-/**
- * UserInfo 用户信息
- */
-export class UserInfo {
-    /**
-     * Creates a new UserInfo instance.
-     * @param {Partial<UserInfo>} [$$source = {}] - The source object to create the UserInfo.
-     */
-    constructor($$source = {}) {
-        if (!("username" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["username"] = "";
-        }
-        if (!("token" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["token"] = "";
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new UserInfo instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {UserInfo}
-     */
-    static createFrom($$source = {}) {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new UserInfo(/** @type {Partial<UserInfo>} */($$parsedSource));
     }
 }
 

@@ -112,6 +112,9 @@ const showSettings = ref(false)
 const settingsLoading = ref(false)
 const gitConfig = ref({ userName: '', userEmail: '' })
 
+// ---- 代理开关 ----
+const projectProxy = ref(null) // null: 跟随全局, true: 强制使用, false: 强制不使用
+
 // ---- 冲突处理 ----
 const isMerging = ref(false)
 const conflictFiles = ref([])
@@ -266,6 +269,8 @@ async function loadStatus() {
       if (remotes.value.length && !remotes.value.find(r => r.name === currentRemote.value)) {
         currentRemote.value = remotes.value[0].name
       }
+      // 同步代理设置
+      projectProxy.value = result.useProxy ?? null
     } else {
       errorMsg.value = '获取项目状态返回空值: ' + JSON.stringify(result)
       loadingBase.value = false
@@ -539,6 +544,85 @@ async function gitAction(action) {
     console.error(`${action} 失败:`, e)
   } finally {
     actionLoading.value = ''
+  }
+}
+
+// ---- 多端推送 ----
+async function pushToAllRemotes() {
+  if (!props.project?.path) return
+  actionLoading.value = 'pushAll'
+  try {
+    const results = await AppService.PushToAllRemotes(props.project.path)
+    const successCount = results.filter(r => r.success).length
+    const failCount = results.length - successCount
+    if (failCount === 0) {
+      message.success(`已成功推送到全部 ${successCount} 个远程仓库`)
+    } else {
+      Modal.info({
+        title: '多端推送结果',
+        content: h('div', results.map(r =>
+          h('div', { style: `padding: 4px 0; color: ${r.success ? 'var(--success, #a6e3a1)' : '#f38ba8'}` }, [
+            h('span', { style: 'font-weight: 600; margin-right: 8px;' }, r.remote + ':'),
+            h('span', r.success ? '✓ 成功' : '✗ ' + r.message),
+          ])
+        )),
+      })
+    }
+    await loadStatus()
+  } catch (e) {
+    console.error('多端推送失败:', e)
+    Modal.error({ title: '多端推送失败', content: String(e) })
+  } finally {
+    actionLoading.value = ''
+  }
+}
+
+async function pushTagToAllRemotes(tag) {
+  if (!props.project?.path) return
+  try {
+    const results = await AppService.PushTagToAllRemotes(props.project.path, tag.name)
+    const successCount = results.filter(r => r.success).length
+    const failCount = results.length - successCount
+    if (failCount === 0) {
+      message.success(`标签 ${tag.name} 已推送到全部 ${successCount} 个远程仓库`)
+    } else {
+      Modal.info({
+        title: '标签多端推送结果',
+        content: h('div', results.map(r =>
+          h('div', { style: `padding: 4px 0; color: ${r.success ? 'var(--success, #a6e3a1)' : '#f38ba8'}` }, [
+            h('span', { style: 'font-weight: 600; margin-right: 8px;' }, r.remote + ':'),
+            h('span', r.success ? '✓ 成功' : '✗ ' + r.message),
+          ])
+        )),
+      })
+    }
+  } catch (e) {
+    console.error('标签多端推送失败:', e)
+    Modal.error({ title: '推送失败', content: String(e) })
+  }
+}
+
+// ---- 代理开关 ----
+async function toggleProxy(checked) {
+  if (!props.project?.path) return
+  const useProxy = checked ? true : false
+  try {
+    await AppService.SetProjectProxy(props.project.path, useProxy)
+    projectProxy.value = useProxy
+  } catch (e) {
+    console.error('设置代理失败:', e)
+    Modal.error({ title: '设置代理失败', content: String(e) })
+  }
+}
+
+async function resetProxy() {
+  if (!props.project?.path) return
+  try {
+    await AppService.SetProjectProxy(props.project.path, null)
+    projectProxy.value = null
+    message.success('已恢复跟随全局设置')
+  } catch (e) {
+    console.error('重置代理失败:', e)
   }
 }
 
@@ -1399,6 +1483,30 @@ const currentRemoteUrl = computed(() => {
             </template>
           </div>
           <a-space class="project-actions">
+            <a-tooltip :title="projectProxy === null ? '代理: 跟随全局' : projectProxy ? '代理: 已开启' : '代理: 已关闭'">
+              <a-dropdown :trigger="['click']">
+                <a-button size="small" :type="projectProxy === true ? 'primary' : 'default'" :ghost="projectProxy === true">
+                  <template #icon><GlobalOutlined /></template>
+                </a-button>
+                <template #overlay>
+                  <div class="proxy-dropdown">
+                    <div class="proxy-dropdown-title">代理设置</div>
+                    <div class="proxy-dropdown-item" :class="{ active: projectProxy === null }" @click="resetProxy()">
+                      <span>跟随全局</span>
+                      <span v-if="projectProxy === null" style="color: var(--success, #a6e3a1);">✓</span>
+                    </div>
+                    <div class="proxy-dropdown-item" :class="{ active: projectProxy === true }" @click="toggleProxy(true)">
+                      <span>强制使用代理</span>
+                      <span v-if="projectProxy === true" style="color: var(--success, #a6e3a1);">✓</span>
+                    </div>
+                    <div class="proxy-dropdown-item" :class="{ active: projectProxy === false }" @click="toggleProxy(false)">
+                      <span>强制不使用代理</span>
+                      <span v-if="projectProxy === false" style="color: var(--success, #a6e3a1);">✓</span>
+                    </div>
+                  </div>
+                </template>
+              </a-dropdown>
+            </a-tooltip>
             <a-button size="small" :loading="actionLoading === 'fetch'" :disabled="loadingBase" @click="gitAction('fetch')">
               <template #icon><SyncOutlined /></template>
               Fetch
@@ -1411,6 +1519,12 @@ const currentRemoteUrl = computed(() => {
               <template #icon><CloudUploadOutlined /></template>
               Push
             </a-button>
+            <a-tooltip title="推送到所有远程仓库">
+              <a-button size="small" :loading="actionLoading === 'pushAll'" :disabled="loadingBase || remotes.length < 2" @click="pushToAllRemotes">
+                <template #icon><SendOutlined /></template>
+                Push All
+              </a-button>
+            </a-tooltip>
             <a-button size="small" :disabled="loadingBase" @click="loadStatus">
               <template #icon><ReloadOutlined /></template>
             </a-button>
@@ -1813,9 +1927,14 @@ const currentRemoteUrl = computed(() => {
                         <TagOutlined class="tag-icon" />
                         <span class="tag-name">{{ tag.name }}</span>
                         <div class="tag-action-btns" @click.stop>
-                          <a-tooltip title="推送到远程">
+                          <a-tooltip title="推送到当前远程">
                             <a-button type="text" size="small" class="tag-action-btn push" @click="pushTag(tag)">
                               <template #icon><SendOutlined /></template>
+                            </a-button>
+                          </a-tooltip>
+                          <a-tooltip title="推送到所有远程" v-if="remotes.length > 1">
+                            <a-button type="text" size="small" class="tag-action-btn push" @click="pushTagToAllRemotes(tag)">
+                              <template #icon><CloudUploadOutlined /></template>
                             </a-button>
                           </a-tooltip>
                           <a-tooltip title="删除标签">
@@ -2076,6 +2195,41 @@ const currentRemoteUrl = computed(() => {
 
 .project-actions {
   flex-shrink: 0;
+}
+
+/* 代理设置下拉 */
+.proxy-dropdown {
+  background: var(--dropdown-bg, #1e1e2e);
+  border: 1px solid var(--border-color, #313244);
+  border-radius: 8px;
+  padding: 4px 0;
+  min-width: 180px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+.proxy-dropdown-title {
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border-color, #313244);
+}
+.proxy-dropdown-item {
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary, #cdd6f4);
+  transition: background 0.15s;
+}
+.proxy-dropdown-item:hover {
+  background: var(--hover-bg, rgba(137, 180, 250, 0.08));
+}
+.proxy-dropdown-item.active {
+  color: var(--accent, #89b4fa);
 }
 
 /* 主体区域 */

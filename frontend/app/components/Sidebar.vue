@@ -3,7 +3,6 @@ import { ref, onMounted, computed, h } from 'vue'
 import {
   FolderOutlined,
   FolderOpenOutlined,
-  UserOutlined,
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
@@ -15,6 +14,9 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   BranchesOutlined,
+  KeyOutlined,
+  GroupOutlined,
+  SwapOutlined,
 } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { AppService } from '../../bindings/github.com/zhuy1228/GitPilot/internal/app'
@@ -31,12 +33,26 @@ const selectedKeys = ref([])
 
 // 添加项目弹窗
 const showAddDialog = ref(false)
-const addForm = ref({ platform: '', username: '', name: '', path: '' })
+const addForm = ref({ name: '', path: '', group: '' })
 
 // 克隆项目弹窗
 const showCloneDialog = ref(false)
-const cloneForm = ref({ platform: '', username: '', repoURL: '', parentDir: '', name: '' })
+const cloneForm = ref({ repoURL: '', parentDir: '', name: '', group: '' })
 const cloneLoading = ref(false)
+
+// 分组弹窗
+const showGroupDialog = ref(false)
+const groupDialogMode = ref('add')
+const groupForm = ref({ name: '', icon: '', oldName: '' })
+
+// 凭证弹窗
+const showCredentialDialog = ref(false)
+const credentialDialogMode = ref('add')
+const credentialForm = ref({ platform: '', baseUrl: '', username: '', token: '', oldPlatform: '', oldUsername: '' })
+
+// 凭证列表弹窗
+const showCredentialList = ref(false)
+const credentials = ref([])
 
 // ---- 批量操作 ----
 const showBatchModal = ref(false)
@@ -54,24 +70,23 @@ const batchResultMap = computed(() => {
 // 右键菜单
 const contextMenu = ref({ visible: false, x: 0, y: 0, type: '', data: {} })
 
-// 平台弹窗
-const showPlatformDialog = ref(false)
-const platformDialogMode = ref('add')
-const platformForm = ref({ name: '', baseUrl: '', oldName: '' })
+// 获取所有分组名（用于下拉选择）
+const groupNames = computed(() => {
+  const names = []
+  ;(tree.value || []).forEach(node => {
+    if (node.type === 'group') {
+      names.push(node.label)
+    }
+  })
+  return names
+})
 
-// 用户弹窗
-const showUserDialog = ref(false)
-const userDialogMode = ref('add')
-const userForm = ref({ platform: '', username: '', token: '', oldUsername: '' })
-
-// 构建 key → 原始节点 的映射，避免 a-tree event node 丢失自定义字段
+// 构建 key → 原始节点 的映射
 const nodeMap = computed(() => {
   const map = {}
-  ;(tree.value || []).forEach(platform => {
-    platform.children?.forEach(user => {
-      user.children?.forEach(proj => {
-        map[proj.key] = proj
-      })
+  ;(tree.value || []).forEach(group => {
+    group.children?.forEach(proj => {
+      map[proj.key] = proj
     })
   })
   return map
@@ -79,26 +94,18 @@ const nodeMap = computed(() => {
 
 // 转换后端树数据为 a-tree 格式
 const treeData = computed(() => {
-  return (tree.value || []).map(platform => ({
-    key: platform.key,
-    title: platform.label,
-    type: 'platform',
+  return (tree.value || []).map(group => ({
+    key: group.key,
+    title: group.label,
+    type: 'group',
+    icon: group.icon,
     isLeaf: false,
-    children: (platform.children || []).map(user => ({
-      key: user.key,
-      title: user.label,
-      type: 'user',
-      platformKey: platform.key,
-      isLeaf: false,
-      children: (user.children || []).map(proj => ({
-        key: proj.key,
-        title: proj.label,
-        type: 'project',
-        path: proj.path,
-        platformKey: platform.key,
-        username: user.label,
-        isLeaf: true,
-      }))
+    children: (group.children || []).map(proj => ({
+      key: proj.key,
+      title: proj.label,
+      type: 'project',
+      path: proj.path,
+      isLeaf: true,
     }))
   }))
 })
@@ -110,11 +117,6 @@ async function loadTree() {
     const keys = []
     tree.value.forEach(node => {
       keys.push(node.key)
-      if (node.children) {
-        node.children.forEach(child => {
-          keys.push(child.key)
-        })
-      }
     })
     expandedKeys.value = keys
   } catch (e) {
@@ -125,10 +127,8 @@ async function loadTree() {
 function onTreeSelect(keys, { node }) {
   if (node.type === 'project') {
     selectedKeys.value = keys
-    // 从 nodeMap 中取 path，避免 a-tree 事件节点丢失自定义字段
     const raw = nodeMap.value[node.key]
     const path = raw?.path || node.path || ''
-    console.log('[Sidebar] select project:', node.key, 'path:', path)
     emit('select-project', { key: node.key, label: node.title || raw?.label, path, type: 'project' })
   }
 }
@@ -138,15 +138,11 @@ function onRightClick({ event, node }) {
   event.preventDefault()
   const type = node.type
   const data = {}
-  if (type === 'platform') {
-    data.key = node.key
-  } else if (type === 'user') {
-    data.platformKey = node.platformKey
-    data.username = node.title
+  if (type === 'group') {
+    data.groupName = node.title
   } else if (type === 'project') {
-    data.platformKey = node.platformKey
-    data.username = node.username
     data.name = node.title
+    data.path = node.path
   }
   contextMenu.value = { visible: true, x: event.clientX, y: event.clientY, type, data }
 }
@@ -164,40 +160,36 @@ function onContextMenuClick({ key: action }) {
   const { type, data } = contextMenu.value
   hideContextMenu()
   switch (action) {
-    case 'add-platform': openAddPlatformDialog(); break
-    case 'add-user': openAddUserDialog(data.key || data.platformKey); break
-    case 'edit-platform': openEditPlatformDialog(data.key); break
-    case 'remove-platform': removePlatform(data.key); break
-    case 'add-project': openAddDialog(data.platformKey, data.username); break
-    case 'clone-project': openCloneDialog(data.platformKey, data.username); break
-    case 'edit-user': openEditUserDialog(data.platformKey, data.username); break
-    case 'remove-user': removeUser(data.platformKey, data.username); break
-    case 'remove-project': removeProject(data.platformKey, data.username, data.name); break
+    case 'add-group': openAddGroupDialog(); break
+    case 'edit-group': openEditGroupDialog(data.groupName); break
+    case 'remove-group': removeGroup(data.groupName); break
+    case 'add-project': openAddDialog(data.groupName); break
+    case 'clone-project': openCloneDialog(data.groupName); break
+    case 'remove-project': removeProject(data.path); break
+    case 'manage-credentials': openCredentialList(); break
   }
 }
 
 const contextMenuItems = computed(() => {
   const { type } = contextMenu.value
   if (type === 'empty') {
-    return [{ key: 'add-platform', label: '添加平台', icon: h(PlusOutlined) }]
-  }
-  if (type === 'platform') {
     return [
-      { key: 'add-user', label: '添加用户', icon: h(UserOutlined) },
-      { key: 'edit-platform', label: '编辑平台', icon: h(EditOutlined) },
+      { key: 'add-group', label: '添加分组', icon: h(GroupOutlined) },
+      { key: 'add-project', label: '添加项目', icon: h(FolderOutlined) },
+      { key: 'clone-project', label: '克隆项目', icon: h(CloudDownloadOutlined) },
       { type: 'divider' },
-      { key: 'add-platform', label: '添加平台', icon: h(PlusOutlined) },
-      { type: 'divider' },
-      { key: 'remove-platform', label: '删除平台', danger: true, icon: h(DeleteOutlined) },
+      { key: 'manage-credentials', label: '凭证管理', icon: h(KeyOutlined) },
     ]
   }
-  if (type === 'user') {
+  if (type === 'group') {
     return [
       { key: 'add-project', label: '添加项目', icon: h(FolderOutlined) },
       { key: 'clone-project', label: '克隆项目', icon: h(CloudDownloadOutlined) },
-      { key: 'edit-user', label: '编辑用户', icon: h(EditOutlined) },
       { type: 'divider' },
-      { key: 'remove-user', label: '删除用户', danger: true, icon: h(DeleteOutlined) },
+      { key: 'edit-group', label: '编辑分组', icon: h(EditOutlined) },
+      { key: 'add-group', label: '添加分组', icon: h(GroupOutlined) },
+      { type: 'divider' },
+      { key: 'remove-group', label: '删除分组', danger: true, icon: h(DeleteOutlined) },
     ]
   }
   if (type === 'project') {
@@ -211,109 +203,49 @@ const contextMenuItems = computed(() => {
   return []
 })
 
-// --- 平台操作 ---
-function openAddPlatformDialog() {
-  platformDialogMode.value = 'add'
-  platformForm.value = { name: '', baseUrl: '', oldName: '' }
-  showPlatformDialog.value = true
+// --- 分组操作 ---
+function openAddGroupDialog() {
+  groupDialogMode.value = 'add'
+  groupForm.value = { name: '', icon: 'folder', oldName: '' }
+  showGroupDialog.value = true
 }
 
-async function openEditPlatformDialog(platformKey) {
-  try {
-    const info = await AppService.GetPlatformInfo(platformKey)
-    platformDialogMode.value = 'edit'
-    platformForm.value = { name: info.name, baseUrl: info.baseUrl || '', oldName: info.name }
-    showPlatformDialog.value = true
-  } catch (e) {
-    console.error('获取平台信息失败:', e)
-  }
+function openEditGroupDialog(groupName) {
+  groupDialogMode.value = 'edit'
+  groupForm.value = { name: groupName, icon: '', oldName: groupName }
+  showGroupDialog.value = true
 }
 
-async function savePlatform() {
-  if (!platformForm.value.name) return
+async function saveGroup() {
+  if (!groupForm.value.name) return
   try {
-    if (platformDialogMode.value === 'add') {
-      await AppService.AddPlatform(platformForm.value.name, platformForm.value.baseUrl)
+    if (groupDialogMode.value === 'add') {
+      await AppService.AddGroup(groupForm.value.name, groupForm.value.icon || 'folder')
     } else {
-      await AppService.UpdatePlatform(platformForm.value.oldName, platformForm.value.baseUrl)
+      await AppService.UpdateGroup(groupForm.value.oldName, groupForm.value.name, groupForm.value.icon)
     }
-    showPlatformDialog.value = false
+    showGroupDialog.value = false
     await loadTree()
     emit('tree-updated')
   } catch (e) {
-    console.error('操作失败:', e)
+    message.error('操作失败: ' + String(e))
   }
 }
 
-async function removePlatform(name) {
-  if (!confirm(`确定删除平台 "${name}" 及其所有用户和项目吗？`)) return
+async function removeGroup(name) {
+  if (!confirm(`确定删除分组 "${name}" 吗？分组下的项目将移到"未分组"。`)) return
   try {
-    await AppService.RemovePlatform(name)
+    await AppService.RemoveGroup(name)
     await loadTree()
     emit('tree-updated')
   } catch (e) {
-    console.error('删除失败:', e)
-  }
-}
-
-// --- 用户操作 ---
-function openAddUserDialog(platformKey) {
-  userDialogMode.value = 'add'
-  userForm.value = { platform: platformKey, username: '', token: '', oldUsername: '' }
-  showUserDialog.value = true
-}
-
-async function openEditUserDialog(platformKey, username) {
-  try {
-    const info = await AppService.GetUserInfo(platformKey, username)
-    userDialogMode.value = 'edit'
-    userForm.value = {
-      platform: platformKey,
-      username: info.username,
-      token: info.token || '',
-      oldUsername: info.username
-    }
-    showUserDialog.value = true
-  } catch (e) {
-    console.error('获取用户信息失败:', e)
-  }
-}
-
-async function saveUser() {
-  if (!userForm.value.username) return
-  try {
-    if (userDialogMode.value === 'add') {
-      await AppService.AddUser(userForm.value.platform, userForm.value.username, userForm.value.token)
-    } else {
-      await AppService.UpdateUser(
-        userForm.value.platform,
-        userForm.value.oldUsername,
-        userForm.value.username,
-        userForm.value.token
-      )
-    }
-    showUserDialog.value = false
-    await loadTree()
-    emit('tree-updated')
-  } catch (e) {
-    console.error('操作失败:', e)
-  }
-}
-
-async function removeUser(platform, username) {
-  if (!confirm(`确定删除用户 "${username}" 及其所有项目吗？`)) return
-  try {
-    await AppService.RemoveUser(platform, username)
-    await loadTree()
-    emit('tree-updated')
-  } catch (e) {
-    console.error('删除失败:', e)
+    message.error('删除失败: ' + String(e))
   }
 }
 
 // --- 项目操作 ---
-function openAddDialog(platformKey, username) {
-  addForm.value = { platform: platformKey, username: username, name: '', path: '' }
+function openAddDialog(groupName) {
+  addForm.value = { name: '', path: '', group: groupName || '' }
   showAddDialog.value = true
 }
 
@@ -322,7 +254,6 @@ async function pickDirectory() {
     const path = await AppService.SelectDirectory()
     if (path) {
       addForm.value.path = path
-      // 如果项目名称为空，自动用文件夹名称填充
       if (!addForm.value.name) {
         const parts = path.replace(/\\/g, '/').split('/')
         addForm.value.name = parts[parts.length - 1] || ''
@@ -336,23 +267,18 @@ async function pickDirectory() {
 async function addProject() {
   if (!addForm.value.name || !addForm.value.path) return
   try {
-    await AppService.AddProject(
-      addForm.value.platform,
-      addForm.value.username,
-      addForm.value.name,
-      addForm.value.path
-    )
+    await AppService.AddProject(addForm.value.name, addForm.value.path, addForm.value.group)
     showAddDialog.value = false
     await loadTree()
     emit('tree-updated')
   } catch (e) {
-    console.error('添加项目失败:', e)
+    message.error('添加项目失败: ' + String(e))
   }
 }
 
 // --- 克隆项目 ---
-function openCloneDialog(platformKey, username) {
-  cloneForm.value = { platform: platformKey, username: username, repoURL: '', parentDir: '', name: '' }
+function openCloneDialog(groupName) {
+  cloneForm.value = { repoURL: '', parentDir: '', name: '', group: groupName || '' }
   showCloneDialog.value = true
 }
 
@@ -368,7 +294,6 @@ async function pickCloneDirectory() {
 }
 
 function onRepoURLChange() {
-  // 从仓库 URL 自动提取项目名称
   if (!cloneForm.value.name && cloneForm.value.repoURL) {
     const url = cloneForm.value.repoURL.trim()
     const match = url.match(/\/([^\/]+?)(\.git)?$/)
@@ -383,32 +308,96 @@ async function cloneProject() {
   cloneLoading.value = true
   try {
     await AppService.CloneProject(
-      cloneForm.value.platform,
-      cloneForm.value.username,
       cloneForm.value.repoURL,
       cloneForm.value.parentDir,
-      cloneForm.value.name
+      cloneForm.value.name,
+      cloneForm.value.group
     )
     showCloneDialog.value = false
     message.success('克隆成功')
     await loadTree()
     emit('tree-updated')
   } catch (e) {
-    console.error('克隆项目失败:', e)
     message.error('克隆失败: ' + String(e))
   } finally {
     cloneLoading.value = false
   }
 }
 
-async function removeProject(platform, username, name) {
+async function removeProject(path) {
+  const name = path.split(/[/\\]/).pop()
   if (!confirm(`确定删除项目 "${name}" 吗？`)) return
   try {
-    await AppService.RemoveProject(platform, username, name)
+    await AppService.RemoveProject(path)
     await loadTree()
     emit('tree-updated')
   } catch (e) {
-    console.error('删除项目失败:', e)
+    message.error('删除项目失败: ' + String(e))
+  }
+}
+
+// --- 凭证管理 ---
+async function openCredentialList() {
+  try {
+    const list = await AppService.GetCredentials()
+    credentials.value = list || []
+  } catch (e) {
+    credentials.value = []
+  }
+  showCredentialList.value = true
+}
+
+function openAddCredentialDialog() {
+  credentialDialogMode.value = 'add'
+  credentialForm.value = { platform: '', baseUrl: '', username: '', token: '', oldPlatform: '', oldUsername: '' }
+  showCredentialDialog.value = true
+}
+
+function openEditCredentialDialog(cred) {
+  credentialDialogMode.value = 'edit'
+  credentialForm.value = {
+    platform: cred.platform,
+    baseUrl: cred.baseUrl || '',
+    username: cred.username,
+    token: cred.token || '',
+    oldPlatform: cred.platform,
+    oldUsername: cred.username
+  }
+  showCredentialDialog.value = true
+}
+
+async function saveCredential() {
+  if (!credentialForm.value.platform || !credentialForm.value.username) return
+  try {
+    if (credentialDialogMode.value === 'add') {
+      await AppService.AddCredential(
+        credentialForm.value.platform,
+        credentialForm.value.baseUrl,
+        credentialForm.value.username,
+        credentialForm.value.token
+      )
+    } else {
+      await AppService.UpdateCredential(
+        credentialForm.value.oldPlatform,
+        credentialForm.value.oldUsername,
+        credentialForm.value.baseUrl,
+        credentialForm.value.token
+      )
+    }
+    showCredentialDialog.value = false
+    await openCredentialList()
+  } catch (e) {
+    message.error('操作失败: ' + String(e))
+  }
+}
+
+async function removeCredential(platform, username) {
+  if (!confirm(`确定删除凭证 "${platform}/${username}" 吗？`)) return
+  try {
+    await AppService.RemoveCredential(platform, username)
+    await openCredentialList()
+  } catch (e) {
+    message.error('删除失败: ' + String(e))
   }
 }
 
@@ -485,17 +474,15 @@ async function doBatchPush() {
   }
 }
 
-// 平台 SVG Logo
-const platformLogos = {
+// 分组图标
+const groupIcons = {
   github: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>`,
   gitee: `<svg viewBox="0 0 1024 1024" fill="currentColor"><path d="M512 1024C229.222 1024 0 794.778 0 512S229.222 0 512 0s512 229.222 512 512-229.222 512-512 512z m259.149-568.883h-290.74a25.293 25.293 0 0 0-25.292 25.293l-0.026 63.206c0 13.952 11.315 25.293 25.267 25.293h177.024c13.978 0 25.293 11.315 25.293 25.267v12.646a75.853 75.853 0 0 1-75.853 75.853h-240.23a25.293 25.293 0 0 1-25.267-25.293V417.203a75.853 75.853 0 0 1 75.827-75.853h353.946a25.293 25.293 0 0 0 25.267-25.292l0.077-63.207a25.293 25.293 0 0 0-25.268-25.293H417.152a189.62 189.62 0 0 0-189.62 189.645V771.15c0 13.977 11.316 25.293 25.294 25.293h372.94a170.65 170.65 0 0 0 170.65-170.65V480.384a25.293 25.293 0 0 0-25.293-25.267z"/></svg>`,
   gitea: `<svg viewBox="0 0 640 640" fill="currentColor"><path d="M395.022 297.778c-13.158 0-23.822 10.664-23.822 23.822s10.664 23.822 23.822 23.822 23.822-10.664 23.822-23.822-10.664-23.822-23.822-23.822zM243.2 297.778c-13.158 0-23.822 10.664-23.822 23.822s10.664 23.822 23.822 23.822 23.822-10.664 23.822-23.822-10.664-23.822-23.822-23.822zM319.111 22.756C158.578 22.756 28.444 152.889 28.444 313.422s130.133 290.667 290.667 290.667 290.667-130.133 290.667-290.667S479.644 22.756 319.111 22.756zm165.689 361.244c0 5.333-0.711 10.667-1.778 15.644-20.267 93.867-148.089 167.111-305.067 167.111a360.604 360.604 0 0 1-65.778-5.689c-21.333 18.133-56.889 37.689-101.333 49.422-7.822 2.133-16 3.911-24.889 5.333h-0.711c-4.267 0-7.822-3.556-8.889-7.822v-0.356c-1.067-4.622 2.133-7.467 4.978-10.667 17.067-18.844 36.622-34.844 48-71.467-51.911-36.267-83.911-85.067-83.911-139.733 0-106.311 107.378-192.356 239.644-192.356 118.4 0 220.089 68.267 238.578 160.356 1.778 6.4 3.556 14.578 3.556 22.4-0.356 2.489-0.356 5.333-0.356 7.822z"/></svg>`,
-  default: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M15 5.6c0-.3-.2-.6-.5-.7L8.3.2a.6.6 0 0 0-.6 0L1.5 4.9c-.3.1-.5.4-.5.7v5.8c0 .3.2.6.5.7l6.2 3.7c.2.1.4.1.6 0l6.2-3.7c.3-.1.5-.4.5-.7V5.6zM8 1.2l5.2 3.1L8 7.5 2.8 4.3 8 1.2zm-6 4.5l5.5 3.2v6.3L2 12V5.7zm7 9.5V9l5.5-3.2V12L9 15.2z"/></svg>`
 }
 
-function getPlatformColor(name) {
-  const colors = { github: '#e6edf3', gitee: '#c71d23', gitea: '#609926' }
-  return colors[name] || 'var(--text-secondary)'
+function getGroupIcon(icon) {
+  return groupIcons[icon] || null
 }
 
 onMounted(() => {
@@ -511,7 +498,7 @@ onMounted(() => {
         <a-button type="text" size="small" @click="openBatchModal" title="批量操作">
           <template #icon><AppstoreOutlined /></template>
         </a-button>
-        <a-button type="text" size="small" @click="openAddPlatformDialog" title="添加平台">
+        <a-button type="text" size="small" @click="openAddGroupDialog" title="添加分组">
           <template #icon><PlusOutlined /></template>
         </a-button>
       </a-space>
@@ -529,21 +516,20 @@ onMounted(() => {
         @rightClick="onRightClick"
         @contextmenu.stop
       >
-        <template #title="{ title, type, key }">
+        <template #title="{ title, type, icon }">
           <div class="tree-node-title">
             <span
-              v-if="type === 'platform'"
-              class="platform-logo"
-              :style="{ color: getPlatformColor(key) }"
-              v-html="platformLogos[key] || platformLogos.default"
+              v-if="type === 'group' && getGroupIcon(icon)"
+              class="group-logo"
+              v-html="getGroupIcon(icon)"
             ></span>
-            <UserOutlined v-else-if="type === 'user'" class="node-icon" />
+            <GroupOutlined v-else-if="type === 'group'" class="node-icon" />
             <FolderOutlined v-else class="node-icon" />
             <span class="node-label">{{ title }}</span>
           </div>
         </template>
       </a-tree>
-      <div v-else class="empty-tip">右键可添加平台</div>
+      <div v-else class="empty-tip">右键添加分组或项目</div>
     </div>
 
     <!-- 右键菜单 -->
@@ -577,12 +563,6 @@ onMounted(() => {
       :width="420"
     >
       <a-form layout="vertical" :style="{ marginTop: '16px' }">
-        <a-form-item label="平台">
-          <a-input :value="addForm.platform" disabled />
-        </a-form-item>
-        <a-form-item label="用户">
-          <a-input :value="addForm.username" disabled />
-        </a-form-item>
         <a-form-item label="项目名称">
           <a-input v-model:value="addForm.name" placeholder="my-project" />
         </a-form-item>
@@ -596,6 +576,11 @@ onMounted(() => {
               />
             </template>
           </a-input>
+        </a-form-item>
+        <a-form-item label="分组">
+          <a-select v-model:value="addForm.group" placeholder="选择分组（可选）" allow-clear>
+            <a-select-option v-for="g in groupNames" :key="g" :value="g">{{ g }}</a-select-option>
+          </a-select>
         </a-form-item>
       </a-form>
     </a-modal>
@@ -613,12 +598,6 @@ onMounted(() => {
       :width="480"
     >
       <a-form layout="vertical" :style="{ marginTop: '16px' }">
-        <a-form-item label="平台">
-          <a-input :value="cloneForm.platform" disabled />
-        </a-form-item>
-        <a-form-item label="用户">
-          <a-input :value="cloneForm.username" disabled />
-        </a-form-item>
         <a-form-item label="仓库地址" required>
           <a-input
             v-model:value="cloneForm.repoURL"
@@ -640,6 +619,11 @@ onMounted(() => {
         <a-form-item label="项目名称" required>
           <a-input v-model:value="cloneForm.name" placeholder="自动从仓库地址提取" />
         </a-form-item>
+        <a-form-item label="分组">
+          <a-select v-model:value="cloneForm.group" placeholder="选择分组（可选）" allow-clear>
+            <a-select-option v-for="g in groupNames" :key="g" :value="g">{{ g }}</a-select-option>
+          </a-select>
+        </a-form-item>
         <div v-if="cloneForm.parentDir && cloneForm.name" style="font-size: 12px; color: var(--text-muted); margin-top: -8px; margin-bottom: 8px;">
           <span>目标路径：</span>
           <span style="color: var(--accent, #89b4fa);">{{ cloneForm.parentDir }}/{{ cloneForm.name }}</span>
@@ -647,53 +631,109 @@ onMounted(() => {
       </a-form>
     </a-modal>
 
-    <!-- 平台弹窗 -->
+    <!-- 分组弹窗 -->
     <a-modal
-      v-model:open="showPlatformDialog"
-      :title="platformDialogMode === 'add' ? '添加平台' : '编辑平台'"
-      @ok="savePlatform"
-      :ok-text="platformDialogMode === 'add' ? '添加' : '保存'"
+      v-model:open="showGroupDialog"
+      :title="groupDialogMode === 'add' ? '添加分组' : '编辑分组'"
+      @ok="saveGroup"
+      :ok-text="groupDialogMode === 'add' ? '添加' : '保存'"
       cancel-text="取消"
       :width="420"
     >
       <a-form layout="vertical" :style="{ marginTop: '16px' }">
-        <a-form-item label="平台名称">
+        <a-form-item label="分组名称">
+          <a-input v-model:value="groupForm.name" placeholder="我的项目" />
+        </a-form-item>
+        <a-form-item label="图标">
+          <a-select v-model:value="groupForm.icon" placeholder="选择图标">
+            <a-select-option value="folder">📁 文件夹</a-select-option>
+            <a-select-option value="github">🐙 GitHub</a-select-option>
+            <a-select-option value="gitee">🟠 Gitee</a-select-option>
+            <a-select-option value="gitea">🍵 Gitea</a-select-option>
+          </a-select>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 凭证列表弹窗 -->
+    <a-modal
+      v-model:open="showCredentialList"
+      title="凭证管理"
+      :footer="null"
+      :width="520"
+    >
+      <div style="margin-bottom: 12px;">
+        <a-button size="small" @click="openAddCredentialDialog">
+          <template #icon><PlusOutlined /></template>
+          添加凭证
+        </a-button>
+      </div>
+      <div v-if="!credentials.length" style="padding: 24px; text-align: center; color: var(--text-muted);">
+        暂无凭证
+      </div>
+      <div v-else class="credential-list">
+        <div v-for="cred in credentials" :key="cred.platform + '/' + cred.username" class="credential-item">
+          <div class="credential-info">
+            <div class="credential-name">
+              <a-tag :color="cred.platform === 'github' ? 'default' : cred.platform === 'gitee' ? 'red' : 'green'" size="small">
+                {{ cred.platform }}
+              </a-tag>
+              <span>{{ cred.username }}</span>
+            </div>
+            <div v-if="cred.baseUrl" class="credential-url">{{ cred.baseUrl }}</div>
+          </div>
+          <a-space :size="4">
+            <a-button type="text" size="small" @click="openEditCredentialDialog(cred)">
+              <template #icon><EditOutlined /></template>
+            </a-button>
+            <a-button type="text" size="small" danger @click="removeCredential(cred.platform, cred.username)">
+              <template #icon><DeleteOutlined /></template>
+            </a-button>
+          </a-space>
+        </div>
+      </div>
+    </a-modal>
+
+    <!-- 凭证编辑弹窗 -->
+    <a-modal
+      v-model:open="showCredentialDialog"
+      :title="credentialDialogMode === 'add' ? '添加凭证' : '编辑凭证'"
+      @ok="saveCredential"
+      :ok-text="credentialDialogMode === 'add' ? '添加' : '保存'"
+      cancel-text="取消"
+      :width="420"
+    >
+      <a-form layout="vertical" :style="{ marginTop: '16px' }">
+        <a-form-item label="平台">
+          <a-select
+            v-model:value="credentialForm.platform"
+            placeholder="选择平台"
+            :disabled="credentialDialogMode === 'edit'"
+          >
+            <a-select-option value="github">GitHub</a-select-option>
+            <a-select-option value="gitee">Gitee</a-select-option>
+            <a-select-option value="gitea">Gitea</a-select-option>
+            <a-select-option value="gitlab">GitLab</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="用户名">
           <a-input
-            v-model:value="platformForm.name"
-            placeholder="github / gitee / gitea"
-            :disabled="platformDialogMode === 'edit'"
+            v-model:value="credentialForm.username"
+            placeholder="your-username"
+            :disabled="credentialDialogMode === 'edit'"
           />
         </a-form-item>
         <a-form-item>
           <template #label>
             Base URL <span class="form-hint">（自建平台需要填写）</span>
           </template>
-          <a-input v-model:value="platformForm.baseUrl" placeholder="http://192.168.1.10:3000" />
-        </a-form-item>
-      </a-form>
-    </a-modal>
-
-    <!-- 用户弹窗 -->
-    <a-modal
-      v-model:open="showUserDialog"
-      :title="userDialogMode === 'add' ? '添加用户' : '编辑用户'"
-      @ok="saveUser"
-      :ok-text="userDialogMode === 'add' ? '添加' : '保存'"
-      cancel-text="取消"
-      :width="420"
-    >
-      <a-form layout="vertical" :style="{ marginTop: '16px' }">
-        <a-form-item label="平台">
-          <a-input :value="userForm.platform" disabled />
-        </a-form-item>
-        <a-form-item label="用户名">
-          <a-input v-model:value="userForm.username" placeholder="your-username" />
+          <a-input v-model:value="credentialForm.baseUrl" placeholder="http://192.168.1.10:3000" />
         </a-form-item>
         <a-form-item>
           <template #label>
             Token <span class="form-hint">（可选，用于 API 认证）</span>
           </template>
-          <a-input-password v-model:value="userForm.token" placeholder="ghp_xxxx / Bearer token" />
+          <a-input-password v-model:value="credentialForm.token" placeholder="ghp_xxxx / Bearer token" />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -815,7 +855,7 @@ onMounted(() => {
   gap: 6px;
 }
 
-.platform-logo {
+.group-logo {
   width: 16px;
   height: 16px;
   display: inline-flex;
@@ -824,7 +864,7 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.platform-logo :deep(svg) {
+.group-logo :deep(svg) {
   width: 16px;
   height: 16px;
 }
@@ -966,5 +1006,42 @@ onMounted(() => {
 @keyframes pulse {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 0.8; }
+}
+
+/* 凭证列表 */
+.credential-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.credential-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.04));
+}
+
+.credential-item:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.04));
+}
+
+.credential-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.credential-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.credential-url {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 </style>

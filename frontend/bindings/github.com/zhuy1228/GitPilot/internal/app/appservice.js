@@ -32,25 +32,36 @@ export function AbortMerge(path) {
 }
 
 /**
- * AddPlatform 添加新平台
- * @param {string} name
+ * AddCredential 添加凭证
+ * @param {string} platform
  * @param {string} baseURL
+ * @param {string} username
+ * @param {string} token
  * @returns {$CancellablePromise<void>}
  */
-export function AddPlatform(name, baseURL) {
-    return $Call.ByID(526003212, name, baseURL);
+export function AddCredential(platform, baseURL, username, token) {
+    return $Call.ByID(1627284202, platform, baseURL, username, token);
 }
 
 /**
- * AddProject 添加项目到指定平台/用户下
- * @param {string} platform
- * @param {string} username
+ * AddGroup 添加分组
  * @param {string} name
- * @param {string} path
+ * @param {string} icon
  * @returns {$CancellablePromise<void>}
  */
-export function AddProject(platform, username, name, path) {
-    return $Call.ByID(2299402672, platform, username, name, path);
+export function AddGroup(name, icon) {
+    return $Call.ByID(4237035530, name, icon);
+}
+
+/**
+ * AddProject 添加项目
+ * @param {string} name
+ * @param {string} path
+ * @param {string} group
+ * @returns {$CancellablePromise<void>}
+ */
+export function AddProject(name, path, group) {
+    return $Call.ByID(2299402672, name, path, group);
 }
 
 /**
@@ -62,17 +73,6 @@ export function AddProject(platform, username, name, path) {
  */
 export function AddRemote(path, name, url) {
     return $Call.ByID(3697916441, path, name, url);
-}
-
-/**
- * AddUser 添加用户到指定平台
- * @param {string} platform
- * @param {string} username
- * @param {string} token
- * @returns {$CancellablePromise<void>}
- */
-export function AddUser(platform, username, token) {
-    return $Call.ByID(2264426704, platform, username, token);
 }
 
 /**
@@ -120,16 +120,15 @@ export function CheckoutRemoteBranch(path, remoteBranch) {
 }
 
 /**
- * CloneProject 克隆远程仓库到本地目录，并添加到项目树
- * @param {string} platform
- * @param {string} username
+ * CloneProject 克隆远程仓库到本地目录，并添加到项目列表
  * @param {string} repoURL
  * @param {string} parentDir
  * @param {string} name
+ * @param {string} group
  * @returns {$CancellablePromise<void>}
  */
-export function CloneProject(platform, username, repoURL, parentDir, name) {
-    return $Call.ByID(2347019414, platform, username, repoURL, parentDir, name);
+export function CloneProject(repoURL, parentDir, name, group) {
+    return $Call.ByID(2347019414, repoURL, parentDir, name, group);
 }
 
 /**
@@ -314,6 +313,16 @@ export function GetConflictFiles(path) {
 }
 
 /**
+ * GetCredentials 获取所有凭证
+ * @returns {$CancellablePromise<$models.CredentialInfo[]>}
+ */
+export function GetCredentials() {
+    return $Call.ByID(4214051290).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType16($result);
+    }));
+}
+
+/**
  * GetFileContent 获取文件内容
  * @param {string} projectPath
  * @param {string} filePath
@@ -349,18 +358,17 @@ export function GetFileDiffStaged(projectPath, filePath) {
  */
 export function GetGitGlobalConfig() {
     return $Call.ByID(154811497).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType16($result);
+        return $$createType18($result);
     }));
 }
 
 /**
- * GetPlatformInfo 获取平台信息
- * @param {string} name
- * @returns {$CancellablePromise<$models.PlatformInfo | null>}
+ * GetGroups 获取所有分组
+ * @returns {$CancellablePromise<config$0.Group[]>}
  */
-export function GetPlatformInfo(name) {
-    return $Call.ByID(2668095547, name).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType18($result);
+export function GetGroups() {
+    return $Call.ByID(1600884836).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType20($result);
     }));
 }
 
@@ -371,8 +379,17 @@ export function GetPlatformInfo(name) {
  */
 export function GetProjectChangedFiles(path) {
     return $Call.ByID(2302591462, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType20($result);
+        return $$createType22($result);
     }));
+}
+
+/**
+ * GetProjectProxy 获取项目代理设置（nil 表示跟随全局）
+ * @param {string} path
+ * @returns {$CancellablePromise<boolean | null>}
+ */
+export function GetProjectProxy(path) {
+    return $Call.ByID(2515497911, path);
 }
 
 /**
@@ -382,17 +399,17 @@ export function GetProjectChangedFiles(path) {
  */
 export function GetProjectStatus(path) {
     return $Call.ByID(3451089027, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType22($result);
+        return $$createType24($result);
     }));
 }
 
 /**
- * GetProjectTree 获取项目树，供前端侧边栏渲染
+ * GetProjectTree 获取项目树，按分组组织
  * @returns {$CancellablePromise<$models.TreeNode[]>}
  */
 export function GetProjectTree() {
     return $Call.ByID(651189689).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType24($result);
+        return $$createType26($result);
     }));
 }
 
@@ -415,7 +432,7 @@ export function GetRemoteBranches(path, remote) {
  */
 export function GetRemotes(path) {
     return $Call.ByID(975520027, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType26($result);
+        return $$createType28($result);
     }));
 }
 
@@ -426,7 +443,7 @@ export function GetRemotes(path) {
  */
 export function GetStashList(path) {
     return $Call.ByID(1948257945, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType28($result);
+        return $$createType30($result);
     }));
 }
 
@@ -437,18 +454,6 @@ export function GetStashList(path) {
  */
 export function GetTags(path) {
     return $Call.ByID(3979169621, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType30($result);
-    }));
-}
-
-/**
- * GetUserInfo 获取用户信息
- * @param {string} platform
- * @param {string} username
- * @returns {$CancellablePromise<$models.UserInfo | null>}
- */
-export function GetUserInfo(platform, username) {
-    return $Call.ByID(2674655707, platform, username).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType32($result);
     }));
 }
@@ -483,6 +488,16 @@ export function MergeBranch(path, branch) {
 }
 
 /**
+ * MoveProjectToGroup 移动项目到指定分组
+ * @param {string} path
+ * @param {string} group
+ * @returns {$CancellablePromise<void>}
+ */
+export function MoveProjectToGroup(path, group) {
+    return $Call.ByID(1699187666, path, group);
+}
+
+/**
  * PullProject 拉取项目（当前分支，指定 remote）
  * @param {string} path
  * @param {string} remote
@@ -514,23 +529,54 @@ export function PushTag(path, name, remote) {
 }
 
 /**
- * RemovePlatform 删除平台
- * @param {string} name
- * @returns {$CancellablePromise<void>}
+ * PushTagToAllRemotes 一键推送标签到所有远程仓库
+ * @param {string} path
+ * @param {string} tagName
+ * @returns {$CancellablePromise<$models.PushAllResult[]>}
  */
-export function RemovePlatform(name) {
-    return $Call.ByID(2222448051, name);
+export function PushTagToAllRemotes(path, tagName) {
+    return $Call.ByID(2343581171, path, tagName).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType34($result);
+    }));
 }
 
 /**
- * RemoveProject 从指定平台/用户下删除项目
+ * PushToAllRemotes 一键推送到所有远程仓库（当前分支）
+ * @param {string} path
+ * @returns {$CancellablePromise<$models.PushAllResult[]>}
+ */
+export function PushToAllRemotes(path) {
+    return $Call.ByID(1027392731, path).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType34($result);
+    }));
+}
+
+/**
+ * RemoveCredential 删除凭证
  * @param {string} platform
  * @param {string} username
+ * @returns {$CancellablePromise<void>}
+ */
+export function RemoveCredential(platform, username) {
+    return $Call.ByID(414538393, platform, username);
+}
+
+/**
+ * RemoveGroup 删除分组（分组下的项目变为"未分组"）
  * @param {string} name
  * @returns {$CancellablePromise<void>}
  */
-export function RemoveProject(platform, username, name) {
-    return $Call.ByID(2748109581, platform, username, name);
+export function RemoveGroup(name) {
+    return $Call.ByID(3268966203, name);
+}
+
+/**
+ * RemoveProject 删除项目（按路径匹配）
+ * @param {string} path
+ * @returns {$CancellablePromise<void>}
+ */
+export function RemoveProject(path) {
+    return $Call.ByID(2748109581, path);
 }
 
 /**
@@ -541,16 +587,6 @@ export function RemoveProject(platform, username, name) {
  */
 export function RemoveRemote(path, name) {
     return $Call.ByID(2915623022, path, name);
-}
-
-/**
- * RemoveUser 从平台删除用户
- * @param {string} platform
- * @param {string} username
- * @returns {$CancellablePromise<void>}
- */
-export function RemoveUser(platform, username) {
-    return $Call.ByID(1409517275, platform, username);
 }
 
 /**
@@ -642,6 +678,17 @@ export function SetApplication(app) {
  */
 export function SetGitGlobalConfig(name, email) {
     return $Call.ByID(3875064981, name, email);
+}
+
+/**
+ * SetProjectProxy 设置项目代理开关
+ * useProxy: true=强制启用, false=强制禁用, nil(传空)=跟随全局
+ * @param {string} path
+ * @param {boolean | null} useProxy
+ * @returns {$CancellablePromise<void>}
+ */
+export function SetProjectProxy(path, useProxy) {
+    return $Call.ByID(4094650651, path, useProxy);
 }
 
 /**
@@ -742,25 +789,26 @@ export function UpdateAppSettings(logLevel) {
 }
 
 /**
- * UpdatePlatform 修改平台信息（base_url）
- * @param {string} name
- * @param {string} baseURL
- * @returns {$CancellablePromise<void>}
- */
-export function UpdatePlatform(name, baseURL) {
-    return $Call.ByID(3258014550, name, baseURL);
-}
-
-/**
- * UpdateUser 修改用户信息（用户名、token）
+ * UpdateCredential 更新凭证
  * @param {string} platform
- * @param {string} oldUsername
- * @param {string} newUsername
+ * @param {string} username
+ * @param {string} baseURL
  * @param {string} token
  * @returns {$CancellablePromise<void>}
  */
-export function UpdateUser(platform, oldUsername, newUsername, token) {
-    return $Call.ByID(1631729342, platform, oldUsername, newUsername, token);
+export function UpdateCredential(platform, username, baseURL, token) {
+    return $Call.ByID(2448329924, platform, username, baseURL, token);
+}
+
+/**
+ * UpdateGroup 修改分组
+ * @param {string} oldName
+ * @param {string} newName
+ * @param {string} icon
+ * @returns {$CancellablePromise<void>}
+ */
+export function UpdateGroup(oldName, newName, icon) {
+    return $Call.ByID(1322206248, oldName, newName, icon);
 }
 
 // Private type creation functions
@@ -779,21 +827,23 @@ const $$createType11 = $models.CommitLog.createFrom;
 const $$createType12 = $Create.Array($$createType11);
 const $$createType13 = $models.ConflictFileInfo.createFrom;
 const $$createType14 = $Create.Array($$createType13);
-const $$createType15 = $models.GitConfig.createFrom;
-const $$createType16 = $Create.Nullable($$createType15);
-const $$createType17 = $models.PlatformInfo.createFrom;
+const $$createType15 = $models.CredentialInfo.createFrom;
+const $$createType16 = $Create.Array($$createType15);
+const $$createType17 = $models.GitConfig.createFrom;
 const $$createType18 = $Create.Nullable($$createType17);
-const $$createType19 = $models.FileInfo.createFrom;
+const $$createType19 = config$0.Group.createFrom;
 const $$createType20 = $Create.Array($$createType19);
-const $$createType21 = $models.ProjectStatus.createFrom;
-const $$createType22 = $Create.Nullable($$createType21);
-const $$createType23 = $models.TreeNode.createFrom;
-const $$createType24 = $Create.Array($$createType23);
-const $$createType25 = $models.RemoteItem.createFrom;
+const $$createType21 = $models.FileInfo.createFrom;
+const $$createType22 = $Create.Array($$createType21);
+const $$createType23 = $models.ProjectStatus.createFrom;
+const $$createType24 = $Create.Nullable($$createType23);
+const $$createType25 = $models.TreeNode.createFrom;
 const $$createType26 = $Create.Array($$createType25);
-const $$createType27 = $models.StashInfo.createFrom;
+const $$createType27 = $models.RemoteItem.createFrom;
 const $$createType28 = $Create.Array($$createType27);
-const $$createType29 = $models.TagInfo.createFrom;
+const $$createType29 = $models.StashInfo.createFrom;
 const $$createType30 = $Create.Array($$createType29);
-const $$createType31 = $models.UserInfo.createFrom;
-const $$createType32 = $Create.Nullable($$createType31);
+const $$createType31 = $models.TagInfo.createFrom;
+const $$createType32 = $Create.Array($$createType31);
+const $$createType33 = $models.PushAllResult.createFrom;
+const $$createType34 = $Create.Array($$createType33);

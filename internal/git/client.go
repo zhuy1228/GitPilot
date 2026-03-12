@@ -29,10 +29,20 @@ func NewGitClient() *GitClient {
 
 // Run 执行 git 命令，支持超时和代理设置
 func (g *GitClient) Run(path string, args ...string) (string, error) {
+	return g.RunWithProxy(path, nil, args...)
+}
+
+// RunWithProxy 执行 git 命令，useProxy 可覆盖全局代理设置
+// useProxy == nil 时跟随 GitClient 自身的 Enabled 设置
+func (g *GitClient) RunWithProxy(path string, useProxy *bool, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), g.Timeout)
 	defer cancel()
 	header := []string{"-C", path, "-c", "core.quotePath=false"}
-	if g.Enabled {
+	enableProxy := g.Enabled
+	if useProxy != nil {
+		enableProxy = *useProxy
+	}
+	if enableProxy {
 		header = append(header, "-c", "http.proxy="+g.Proxy, "-c", "https.proxy="+g.Proxy)
 	}
 	argsArr := append(header, args...)

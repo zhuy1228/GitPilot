@@ -1,22 +1,22 @@
-platforms:
-  gitea:
+projects:
+  - name: GitPilot
+    path: F:\Project\GitPilot
+    group: github/zhuy1228
+groups:
+  - name: github/zhuy1228
+    icon: github
+  - name: gitee/zhuyuj
+    icon: gitee
+  - name: gitea
+    icon: gitea
+credentials:
+  - platform: github
+    username: zhuy1228
+  - platform: gitee
+    username: zhuyuj
+  - platform: gitea
     base_url: http://192.168.1.10:3000
-    users: []
-  gitee:
-    base_url: ""
-    users:
-      - username: zhuyuj
-        token: ""
-        projects: []
-  github:
-    base_url: ""
-    users:
-      - username: zhuy1228
-        token: ""
-        projects:
-          - name: GitPilot
-            path: F:\Project\GitPilot
-            enabled: false
+    username: ""
 settings:
   concurrency: 6
   network_check: true

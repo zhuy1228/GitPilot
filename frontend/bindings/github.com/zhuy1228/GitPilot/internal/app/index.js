@@ -13,15 +13,15 @@ export {
     CommitFileInfo,
     CommitLog,
     ConflictFileInfo,
+    CredentialInfo,
     FileInfo,
     GitConfig,
     GitStatus,
-    PlatformInfo,
     ProjectOverview,
     ProjectStatus,
+    PushAllResult,
     RemoteItem,
     StashInfo,
     TagInfo,
-    TreeNode,
-    UserInfo
+    TreeNode
 } from "./models.js";

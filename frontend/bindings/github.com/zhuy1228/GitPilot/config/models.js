@@ -6,6 +6,48 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+/**
+ * Group 项目分组
+ */
+export class Group {
+    /**
+     * Creates a new Group instance.
+     * @param {Partial<Group>} [$$source = {}] - The source object to create the Group.
+     */
+    constructor($$source = {}) {
+        if (!("Name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Name"] = "";
+        }
+        if (!("Icon" in $$source)) {
+            /**
+             * 可选图标标识
+             * @member
+             * @type {string}
+             */
+            this["Icon"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Group instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Group}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Group(/** @type {Partial<Group>} */($$parsedSource));
+    }
+}
+
+/**
+ * Settings 应用设置
+ */
 export class Settings {
     /**
      * Creates a new Settings instance.

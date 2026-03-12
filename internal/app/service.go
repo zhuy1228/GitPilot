@@ -28,8 +28,10 @@ func New() *AppService {
 	if err != nil {
 		log.Printf("加载配置失败: %v, 使用默认配置", err)
 		cfg = &config.AppConfig{
-			Platforms: make(map[string]config.Platform),
-			Settings:  config.Settings{Concurrency: 6, NetworkCheck: true, LogLevel: "info"},
+			Projects:    []config.ProjectItem{},
+			Groups:      []config.Group{},
+			Credentials: []config.Credential{},
+			Settings:    config.Settings{Concurrency: 6, NetworkCheck: true, LogLevel: "info"},
 		}
 	}
 	return &AppService{
@@ -54,51 +56,91 @@ func (s *AppService) SelectDirectory() (string, error) {
 	return path, nil
 }
 
-// --- 平台/项目 树形结构 ---
+// --- 项目/分组 树形结构 ---
 
 // TreeNode 前端侧边栏树节点
 type TreeNode struct {
 	Key      string     `json:"key"`
 	Label    string     `json:"label"`
-	Type     string     `json:"type"` // platform, user, project
+	Type     string     `json:"type"` // group, project
 	Path     string     `json:"path,omitempty"`
+	Icon     string     `json:"icon,omitempty"`
 	Children []TreeNode `json:"children,omitempty"`
 }
 
-// GetProjectTree 获取项目树，供前端侧边栏渲染
+// GetProjectTree 获取项目树，按分组组织
 func (s *AppService) GetProjectTree() []TreeNode {
-	var tree []TreeNode
-	for platformName, platform := range s.config.Platforms {
-		platformNode := TreeNode{
-			Key:   platformName,
-			Label: platformName,
-			Type:  "platform",
+	// 按分组归类项目
+	groupProjects := make(map[string][]config.ProjectItem)
+	for _, proj := range s.config.Projects {
+		g := proj.Group
+		if g == "" {
+			g = "未分组"
 		}
-		for _, user := range platform.Users {
-			userNode := TreeNode{
-				Key:   platformName + "/" + user.Username,
-				Label: user.Username,
-				Type:  "user",
-			}
-			for _, proj := range user.Projects {
-				userNode.Children = append(userNode.Children, TreeNode{
-					Key:   platformName + "/" + user.Username + "/" + proj.Name,
-					Label: proj.Name,
-					Type:  "project",
-					Path:  proj.Path,
-				})
-			}
-			platformNode.Children = append(platformNode.Children, userNode)
-		}
-		tree = append(tree, platformNode)
+		groupProjects[g] = append(groupProjects[g], proj)
 	}
+
+	// 构建分组 → icon 映射
+	groupIcon := make(map[string]string)
+	for _, g := range s.config.Groups {
+		groupIcon[g.Name] = g.Icon
+	}
+
+	var tree []TreeNode
+	// 先输出已定义的分组（保持顺序）
+	rendered := make(map[string]bool)
+	for _, g := range s.config.Groups {
+		projects, ok := groupProjects[g.Name]
+		if !ok {
+			projects = nil
+		}
+		node := TreeNode{
+			Key:   "group:" + g.Name,
+			Label: g.Name,
+			Type:  "group",
+			Icon:  g.Icon,
+		}
+		for _, proj := range projects {
+			node.Children = append(node.Children, TreeNode{
+				Key:   "project:" + proj.Path,
+				Label: proj.Name,
+				Type:  "project",
+				Path:  proj.Path,
+			})
+		}
+		tree = append(tree, node)
+		rendered[g.Name] = true
+	}
+
+	// 输出"未分组"或不在 groups 列表里的项目
+	for groupName, projects := range groupProjects {
+		if rendered[groupName] {
+			continue
+		}
+		node := TreeNode{
+			Key:   "group:" + groupName,
+			Label: groupName,
+			Type:  "group",
+			Icon:  "folder",
+		}
+		for _, proj := range projects {
+			node.Children = append(node.Children, TreeNode{
+				Key:   "project:" + proj.Path,
+				Label: proj.Name,
+				Type:  "project",
+				Path:  proj.Path,
+			})
+		}
+		tree = append(tree, node)
+	}
+
 	return tree
 }
 
 // --- 项目管理 ---
 
-// CloneProject 克隆远程仓库到本地目录，并添加到项目树
-func (s *AppService) CloneProject(platform, username, repoURL, parentDir, name string) error {
+// CloneProject 克隆远程仓库到本地目录，并添加到项目列表
+func (s *AppService) CloneProject(repoURL, parentDir, name, group string) error {
 	if repoURL == "" {
 		return fmt.Errorf("仓库地址不能为空")
 	}
@@ -109,198 +151,219 @@ func (s *AppService) CloneProject(platform, username, repoURL, parentDir, name s
 		return fmt.Errorf("项目名称不能为空")
 	}
 
-	// 目标路径: parentDir/name
 	targetPath := parentDir + "/" + name
 
-	// 执行 git clone
 	_, err := s.gitClient.Clone(repoURL, targetPath)
 	if err != nil {
 		return fmt.Errorf("克隆失败: %w", err)
 	}
 
-	// 克隆成功后添加到项目树
-	return s.AddProject(platform, username, name, targetPath)
+	return s.AddProject(name, targetPath, group)
 }
 
-// AddProject 添加项目到指定平台/用户下
-func (s *AppService) AddProject(platform, username, name, path string) error {
-	p, ok := s.config.Platforms[platform]
-	if !ok {
-		return fmt.Errorf("平台 %s 不存在", platform)
+// AddProject 添加项目
+func (s *AppService) AddProject(name, path, group string) error {
+	// 检查路径重复
+	for _, proj := range s.config.Projects {
+		if proj.Path == path {
+			return fmt.Errorf("项目路径 %s 已存在", path)
+		}
 	}
-	for i, user := range p.Users {
-		if user.Username == username {
-			// 检查重复
-			for _, proj := range user.Projects {
-				if proj.Name == name {
-					return fmt.Errorf("项目 %s 已存在", name)
-				}
+	s.config.Projects = append(s.config.Projects, config.ProjectItem{
+		Name:  name,
+		Path:  path,
+		Group: group,
+	})
+	// 如果分组不存在，自动创建
+	if group != "" {
+		found := false
+		for _, g := range s.config.Groups {
+			if g.Name == group {
+				found = true
+				break
 			}
-			s.config.Platforms[platform].Users[i].Projects = append(
-				s.config.Platforms[platform].Users[i].Projects,
-				config.Project{Name: name, Path: path},
-			)
+		}
+		if !found {
+			s.config.Groups = append(s.config.Groups, config.Group{Name: group, Icon: "folder"})
+		}
+	}
+	return config.SaveConfig(s.config)
+}
+
+// RemoveProject 删除项目（按路径匹配）
+func (s *AppService) RemoveProject(path string) error {
+	for i, proj := range s.config.Projects {
+		if proj.Path == path {
+			s.config.Projects = append(s.config.Projects[:i], s.config.Projects[i+1:]...)
 			return config.SaveConfig(s.config)
 		}
 	}
-	return fmt.Errorf("用户 %s 不存在于平台 %s", username, platform)
+	return fmt.Errorf("项目不存在: %s", path)
 }
 
-// RemoveProject 从指定平台/用户下删除项目
-func (s *AppService) RemoveProject(platform, username, name string) error {
-	p, ok := s.config.Platforms[platform]
-	if !ok {
-		return fmt.Errorf("平台 %s 不存在", platform)
-	}
-	for i, user := range p.Users {
-		if user.Username == username {
-			projects := user.Projects
-			for j, proj := range projects {
-				if proj.Name == name {
-					s.config.Platforms[platform].Users[i].Projects = append(projects[:j], projects[j+1:]...)
-					return config.SaveConfig(s.config)
+// MoveProjectToGroup 移动项目到指定分组
+func (s *AppService) MoveProjectToGroup(path, group string) error {
+	for i, proj := range s.config.Projects {
+		if proj.Path == path {
+			s.config.Projects[i].Group = group
+			// 自动创建分组
+			if group != "" {
+				found := false
+				for _, g := range s.config.Groups {
+					if g.Name == group {
+						found = true
+						break
+					}
+				}
+				if !found {
+					s.config.Groups = append(s.config.Groups, config.Group{Name: group, Icon: "folder"})
 				}
 			}
-			return fmt.Errorf("项目 %s 不存在", name)
+			return config.SaveConfig(s.config)
 		}
 	}
-	return fmt.Errorf("用户 %s 不存在于平台 %s", username, platform)
+	return fmt.Errorf("项目不存在: %s", path)
 }
 
-// --- 平台管理 ---
+// --- 分组管理 ---
 
-// AddPlatform 添加新平台
-func (s *AppService) AddPlatform(name, baseURL string) error {
+// GetGroups 获取所有分组
+func (s *AppService) GetGroups() []config.Group {
+	return s.config.Groups
+}
+
+// AddGroup 添加分组
+func (s *AppService) AddGroup(name, icon string) error {
 	if name == "" {
-		return fmt.Errorf("平台名称不能为空")
+		return fmt.Errorf("分组名称不能为空")
 	}
-	if _, ok := s.config.Platforms[name]; ok {
-		return fmt.Errorf("平台 %s 已存在", name)
+	for _, g := range s.config.Groups {
+		if g.Name == name {
+			return fmt.Errorf("分组 %s 已存在", name)
+		}
 	}
-	s.config.Platforms[name] = config.Platform{
-		BaseURL: baseURL,
-		Users:   []config.User{},
+	if icon == "" {
+		icon = "folder"
 	}
+	s.config.Groups = append(s.config.Groups, config.Group{Name: name, Icon: icon})
 	return config.SaveConfig(s.config)
 }
 
-// UpdatePlatform 修改平台信息（base_url）
-func (s *AppService) UpdatePlatform(name, baseURL string) error {
-	p, ok := s.config.Platforms[name]
-	if !ok {
-		return fmt.Errorf("平台 %s 不存在", name)
+// UpdateGroup 修改分组
+func (s *AppService) UpdateGroup(oldName, newName, icon string) error {
+	if newName == "" {
+		return fmt.Errorf("分组名称不能为空")
 	}
-	p.BaseURL = baseURL
-	s.config.Platforms[name] = p
-	return config.SaveConfig(s.config)
+	for i, g := range s.config.Groups {
+		if g.Name == oldName {
+			// 如果改名，检查冲突并同步更新项目的分组引用
+			if oldName != newName {
+				for _, g2 := range s.config.Groups {
+					if g2.Name == newName {
+						return fmt.Errorf("分组 %s 已存在", newName)
+					}
+				}
+				for j, proj := range s.config.Projects {
+					if proj.Group == oldName {
+						s.config.Projects[j].Group = newName
+					}
+				}
+			}
+			s.config.Groups[i].Name = newName
+			if icon != "" {
+				s.config.Groups[i].Icon = icon
+			}
+			return config.SaveConfig(s.config)
+		}
+	}
+	return fmt.Errorf("分组 %s 不存在", oldName)
 }
 
-// RemovePlatform 删除平台
-func (s *AppService) RemovePlatform(name string) error {
-	if _, ok := s.config.Platforms[name]; !ok {
-		return fmt.Errorf("平台 %s 不存在", name)
+// RemoveGroup 删除分组（分组下的项目变为"未分组"）
+func (s *AppService) RemoveGroup(name string) error {
+	for i, g := range s.config.Groups {
+		if g.Name == name {
+			s.config.Groups = append(s.config.Groups[:i], s.config.Groups[i+1:]...)
+			// 将该分组下项目归入未分组
+			for j, proj := range s.config.Projects {
+				if proj.Group == name {
+					s.config.Projects[j].Group = ""
+				}
+			}
+			return config.SaveConfig(s.config)
+		}
 	}
-	delete(s.config.Platforms, name)
-	return config.SaveConfig(s.config)
+	return fmt.Errorf("分组 %s 不存在", name)
 }
 
-// --- 用户管理 ---
+// --- 凭证管理 ---
 
-// AddUser 添加用户到指定平台
-func (s *AppService) AddUser(platform, username, token string) error {
-	p, ok := s.config.Platforms[platform]
-	if !ok {
-		return fmt.Errorf("平台 %s 不存在", platform)
+// CredentialInfo 凭证信息（前端展示用）
+type CredentialInfo struct {
+	Platform string `json:"platform"`
+	BaseURL  string `json:"baseUrl"`
+	Username string `json:"username"`
+	Token    string `json:"token"`
+}
+
+// GetCredentials 获取所有凭证
+func (s *AppService) GetCredentials() []CredentialInfo {
+	var result []CredentialInfo
+	for _, c := range s.config.Credentials {
+		result = append(result, CredentialInfo{
+			Platform: c.Platform,
+			BaseURL:  c.BaseURL,
+			Username: c.Username,
+			Token:    c.Token,
+		})
+	}
+	return result
+}
+
+// AddCredential 添加凭证
+func (s *AppService) AddCredential(platform, baseURL, username, token string) error {
+	if platform == "" {
+		return fmt.Errorf("平台不能为空")
 	}
 	if username == "" {
 		return fmt.Errorf("用户名不能为空")
 	}
-	for _, user := range p.Users {
-		if user.Username == username {
-			return fmt.Errorf("用户 %s 已存在于平台 %s", username, platform)
+	// 检查重复（同平台同用户名）
+	for _, c := range s.config.Credentials {
+		if c.Platform == platform && c.Username == username {
+			return fmt.Errorf("凭证已存在: %s/%s", platform, username)
 		}
 	}
-	p.Users = append(p.Users, config.User{
+	s.config.Credentials = append(s.config.Credentials, config.Credential{
+		Platform: platform,
+		BaseURL:  baseURL,
 		Username: username,
 		Token:    token,
-		Projects: []config.Project{},
 	})
-	s.config.Platforms[platform] = p
 	return config.SaveConfig(s.config)
 }
 
-// UpdateUser 修改用户信息（用户名、token）
-func (s *AppService) UpdateUser(platform, oldUsername, newUsername, token string) error {
-	p, ok := s.config.Platforms[platform]
-	if !ok {
-		return fmt.Errorf("平台 %s 不存在", platform)
-	}
-	if newUsername == "" {
-		return fmt.Errorf("新用户名不能为空")
-	}
-	for i, user := range p.Users {
-		if user.Username == oldUsername {
-			// 如果改了用户名，检查新名字是否冲突
-			if oldUsername != newUsername {
-				for _, u := range p.Users {
-					if u.Username == newUsername {
-						return fmt.Errorf("用户 %s 已存在于平台 %s", newUsername, platform)
-					}
-				}
-			}
-			s.config.Platforms[platform].Users[i].Username = newUsername
-			s.config.Platforms[platform].Users[i].Token = token
+// UpdateCredential 更新凭证
+func (s *AppService) UpdateCredential(platform, username, baseURL, token string) error {
+	for i, c := range s.config.Credentials {
+		if c.Platform == platform && c.Username == username {
+			s.config.Credentials[i].BaseURL = baseURL
+			s.config.Credentials[i].Token = token
 			return config.SaveConfig(s.config)
 		}
 	}
-	return fmt.Errorf("用户 %s 不存在于平台 %s", oldUsername, platform)
+	return fmt.Errorf("凭证不存在: %s/%s", platform, username)
 }
 
-// RemoveUser 从平台删除用户
-func (s *AppService) RemoveUser(platform, username string) error {
-	p, ok := s.config.Platforms[platform]
-	if !ok {
-		return fmt.Errorf("平台 %s 不存在", platform)
-	}
-	for i, user := range p.Users {
-		if user.Username == username {
-			s.config.Platforms[platform] = config.Platform{
-				BaseURL: p.BaseURL,
-				Users:   append(p.Users[:i], p.Users[i+1:]...),
-			}
+// RemoveCredential 删除凭证
+func (s *AppService) RemoveCredential(platform, username string) error {
+	for i, c := range s.config.Credentials {
+		if c.Platform == platform && c.Username == username {
+			s.config.Credentials = append(s.config.Credentials[:i], s.config.Credentials[i+1:]...)
 			return config.SaveConfig(s.config)
 		}
 	}
-	return fmt.Errorf("用户 %s 不存在于平台 %s", username, platform)
-}
-
-// GetUserInfo 获取用户信息
-func (s *AppService) GetUserInfo(platform, username string) (*UserInfo, error) {
-	p, ok := s.config.Platforms[platform]
-	if !ok {
-		return nil, fmt.Errorf("平台 %s 不存在", platform)
-	}
-	for _, user := range p.Users {
-		if user.Username == username {
-			return &UserInfo{
-				Username: user.Username,
-				Token:    user.Token,
-			}, nil
-		}
-	}
-	return nil, fmt.Errorf("用户 %s 不存在于平台 %s", username, platform)
-}
-
-// GetPlatformInfo 获取平台信息
-func (s *AppService) GetPlatformInfo(name string) (*PlatformInfo, error) {
-	p, ok := s.config.Platforms[name]
-	if !ok {
-		return nil, fmt.Errorf("平台 %s 不存在", name)
-	}
-	return &PlatformInfo{
-		Name:    name,
-		BaseURL: p.BaseURL,
-	}, nil
+	return fmt.Errorf("凭证不存在: %s/%s", platform, username)
 }
 
 // --- Git 操作 ---
@@ -312,6 +375,7 @@ type ProjectStatus struct {
 	Remotes       []RemoteItem `json:"remotes"`
 	CurrentRemote string       `json:"currentRemote"`
 	ChangedFiles  []FileInfo   `json:"changedFiles"`
+	UseProxy      *bool        `json:"useProxy"` // nil=跟随全局, true=开启, false=关闭
 }
 
 // RemoteItem 远程仓库信息
@@ -326,18 +390,6 @@ type FileInfo struct {
 	StatusText string `json:"statusText"`
 	FilePath   string `json:"filePath"`
 	Staged     bool   `json:"staged"`
-}
-
-// UserInfo 用户信息
-type UserInfo struct {
-	Username string `json:"username"`
-	Token    string `json:"token"`
-}
-
-// PlatformInfo 平台信息
-type PlatformInfo struct {
-	Name    string `json:"name"`
-	BaseURL string `json:"baseUrl"`
 }
 
 // GetProjectStatus 获取项目 git 状态
@@ -367,12 +419,22 @@ func (s *AppService) GetProjectStatus(path string) (*ProjectStatus, error) {
 		currentRemote = remotes[0].Name
 	}
 
+	// 获取项目代理设置
+	var useProxy *bool
+	for _, proj := range s.config.Projects {
+		if proj.Path == path {
+			useProxy = proj.UseProxy
+			break
+		}
+	}
+
 	return &ProjectStatus{
 		Branch:        strings.TrimSpace(branch),
 		RemoteURL:     remoteURL,
 		Remotes:       remotes,
 		CurrentRemote: currentRemote,
 		ChangedFiles:  []FileInfo{},
+		UseProxy:      useProxy,
 	}, nil
 }
 
@@ -547,7 +609,8 @@ func (s *AppService) PullProject(path, remote string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("获取当前分支失败: %w", err)
 	}
-	return s.gitClient.PullFrom(path, remote, strings.TrimSpace(branch))
+	proxy := s.GetProjectProxy(path)
+	return s.gitClient.RunWithProxy(path, proxy, "pull", remote, strings.TrimSpace(branch))
 }
 
 // PushProject 推送项目（当前分支，指定 remote）
@@ -559,7 +622,102 @@ func (s *AppService) PushProject(path, remote string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("获取当前分支失败: %w", err)
 	}
-	return s.gitClient.PushTo(path, remote, strings.TrimSpace(branch))
+	proxy := s.GetProjectProxy(path)
+	return s.gitClient.RunWithProxy(path, proxy, "push", remote, strings.TrimSpace(branch))
+}
+
+// PushAllResult 一键多端推送结果
+type PushAllResult struct {
+	Remote  string `json:"remote"`
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// PushToAllRemotes 一键推送到所有远程仓库（当前分支）
+func (s *AppService) PushToAllRemotes(path string) ([]PushAllResult, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, fmt.Errorf("项目路径不存在: %s", path)
+	}
+	branch, err := s.gitClient.Branch(path)
+	if err != nil {
+		return nil, fmt.Errorf("获取当前分支失败: %w", err)
+	}
+	branch = strings.TrimSpace(branch)
+
+	remoteList, err := s.gitClient.RemoteList(path)
+	if err != nil {
+		return nil, fmt.Errorf("获取远程仓库列表失败: %w", err)
+	}
+
+	proxy := s.GetProjectProxy(path)
+	var results []PushAllResult
+	for _, r := range remoteList {
+		result := PushAllResult{Remote: r.Name}
+		_, pushErr := s.gitClient.RunWithProxy(path, proxy, "push", r.Name, branch)
+		if pushErr != nil {
+			result.Message = pushErr.Error()
+		} else {
+			result.Success = true
+			result.Message = "推送成功"
+		}
+		results = append(results, result)
+	}
+	return results, nil
+}
+
+// PushTagToAllRemotes 一键推送标签到所有远程仓库
+func (s *AppService) PushTagToAllRemotes(path, tagName string) ([]PushAllResult, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, fmt.Errorf("项目路径不存在: %s", path)
+	}
+	tagName = strings.TrimSpace(tagName)
+	if tagName == "" {
+		return nil, fmt.Errorf("标签名不能为空")
+	}
+
+	remoteList, err := s.gitClient.RemoteList(path)
+	if err != nil {
+		return nil, fmt.Errorf("获取远程仓库列表失败: %w", err)
+	}
+
+	proxy := s.GetProjectProxy(path)
+	var results []PushAllResult
+	for _, r := range remoteList {
+		result := PushAllResult{Remote: r.Name}
+		_, pushErr := s.gitClient.RunWithProxy(path, proxy, "push", r.Name, tagName)
+		if pushErr != nil {
+			result.Message = pushErr.Error()
+		} else {
+			result.Success = true
+			result.Message = "推送成功"
+		}
+		results = append(results, result)
+	}
+	return results, nil
+}
+
+// --- 项目代理开关 ---
+
+// GetProjectProxy 获取项目代理设置（nil 表示跟随全局）
+func (s *AppService) GetProjectProxy(path string) *bool {
+	for _, proj := range s.config.Projects {
+		if proj.Path == path {
+			return proj.UseProxy
+		}
+	}
+	return nil
+}
+
+// SetProjectProxy 设置项目代理开关
+// useProxy: true=强制启用, false=强制禁用, nil(传空)=跟随全局
+func (s *AppService) SetProjectProxy(path string, useProxy *bool) error {
+	for i, proj := range s.config.Projects {
+		if proj.Path == path {
+			s.config.Projects[i].UseProxy = useProxy
+			return config.SaveConfig(s.config)
+		}
+	}
+	return fmt.Errorf("项目不存在: %s", path)
 }
 
 // GetCommitDiff 获取指定提交的 diff
@@ -612,10 +770,11 @@ func (s *AppService) GetCommitFileDiff(path, hash, filePath string) (string, err
 
 // FetchProject 拉取远程信息（指定 remote，空则 fetch --all）
 func (s *AppService) FetchProject(path, remote string) (string, error) {
+	proxy := s.GetProjectProxy(path)
 	if remote == "" {
-		return s.gitClient.Fetch(path)
+		return s.gitClient.RunWithProxy(path, proxy, "fetch")
 	}
-	return s.gitClient.FetchRemote(path, remote)
+	return s.gitClient.RunWithProxy(path, proxy, "fetch", remote)
 }
 
 // CommitLog 提交记录
@@ -1269,30 +1428,26 @@ type ProjectOverview struct {
 // GetAllProjectOverview 获取所有项目的概览状态
 func (s *AppService) GetAllProjectOverview() []ProjectOverview {
 	var results []ProjectOverview
-	for platformName, platform := range s.config.Platforms {
-		for _, user := range platform.Users {
-			for _, proj := range user.Projects {
-				overview := ProjectOverview{
-					Key:  platformName + "/" + user.Username + "/" + proj.Name,
-					Name: proj.Name,
-					Path: proj.Path,
-				}
-				if _, err := os.Stat(proj.Path); os.IsNotExist(err) {
-					overview.Error = "路径不存在"
-					results = append(results, overview)
-					continue
-				}
-				branch, hasChanges, unpushed, err := s.gitClient.QuickStatus(proj.Path)
-				if err != nil {
-					overview.Error = err.Error()
-				} else {
-					overview.Branch = branch
-					overview.HasChanges = hasChanges
-					overview.Unpushed = unpushed
-				}
-				results = append(results, overview)
-			}
+	for _, proj := range s.config.Projects {
+		overview := ProjectOverview{
+			Key:  proj.Path,
+			Name: proj.Name,
+			Path: proj.Path,
 		}
+		if _, err := os.Stat(proj.Path); os.IsNotExist(err) {
+			overview.Error = "路径不存在"
+			results = append(results, overview)
+			continue
+		}
+		branch, hasChanges, unpushed, err := s.gitClient.QuickStatus(proj.Path)
+		if err != nil {
+			overview.Error = err.Error()
+		} else {
+			overview.Branch = branch
+			overview.HasChanges = hasChanges
+			overview.Unpushed = unpushed
+		}
+		results = append(results, overview)
 	}
 	return results
 }
