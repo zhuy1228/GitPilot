@@ -307,9 +307,17 @@ func (s *AppService) GetPlatformInfo(name string) (*PlatformInfo, error) {
 
 // ProjectStatus 项目状态信息
 type ProjectStatus struct {
-	Branch       string     `json:"branch"`
-	RemoteURL    string     `json:"remoteUrl"`
-	ChangedFiles []FileInfo `json:"changedFiles"`
+	Branch        string       `json:"branch"`
+	RemoteURL     string       `json:"remoteUrl"`
+	Remotes       []RemoteItem `json:"remotes"`
+	CurrentRemote string       `json:"currentRemote"`
+	ChangedFiles  []FileInfo   `json:"changedFiles"`
+}
+
+// RemoteItem 远程仓库信息
+type RemoteItem struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
 }
 
 // FileInfo 文件信息
@@ -346,10 +354,25 @@ func (s *AppService) GetProjectStatus(path string) (*ProjectStatus, error) {
 
 	remoteURL, _ := s.gitClient.RemoteURL(path)
 
+	// 获取所有 remote 列表
+	var remotes []RemoteItem
+	remoteList, remoteErr := s.gitClient.RemoteList(path)
+	if remoteErr == nil {
+		for _, r := range remoteList {
+			remotes = append(remotes, RemoteItem{Name: r.Name, URL: r.URL})
+		}
+	}
+	currentRemote := "origin"
+	if len(remotes) > 0 {
+		currentRemote = remotes[0].Name
+	}
+
 	return &ProjectStatus{
-		Branch:       strings.TrimSpace(branch),
-		RemoteURL:    remoteURL,
-		ChangedFiles: []FileInfo{},
+		Branch:        strings.TrimSpace(branch),
+		RemoteURL:     remoteURL,
+		Remotes:       remotes,
+		CurrentRemote: currentRemote,
+		ChangedFiles:  []FileInfo{},
 	}, nil
 }
 
@@ -515,22 +538,28 @@ func (s *AppService) GetFileDiffStaged(projectPath, filePath string) (string, er
 	return s.gitClient.DiffStagedFile(projectPath, filePath)
 }
 
-// PullProject 拉取项目（当前分支）
-func (s *AppService) PullProject(path string) (string, error) {
+// PullProject 拉取项目（当前分支，指定 remote）
+func (s *AppService) PullProject(path, remote string) (string, error) {
+	if remote == "" {
+		remote = "origin"
+	}
 	branch, err := s.gitClient.Branch(path)
 	if err != nil {
 		return "", fmt.Errorf("获取当前分支失败: %w", err)
 	}
-	return s.gitClient.Run(path, "pull", "origin", strings.TrimSpace(branch))
+	return s.gitClient.PullFrom(path, remote, strings.TrimSpace(branch))
 }
 
-// PushProject 推送项目（当前分支）
-func (s *AppService) PushProject(path string) (string, error) {
+// PushProject 推送项目（当前分支，指定 remote）
+func (s *AppService) PushProject(path, remote string) (string, error) {
+	if remote == "" {
+		remote = "origin"
+	}
 	branch, err := s.gitClient.Branch(path)
 	if err != nil {
 		return "", fmt.Errorf("获取当前分支失败: %w", err)
 	}
-	return s.gitClient.Run(path, "push", "origin", strings.TrimSpace(branch))
+	return s.gitClient.PushTo(path, remote, strings.TrimSpace(branch))
 }
 
 // GetCommitDiff 获取指定提交的 diff
@@ -581,9 +610,12 @@ func (s *AppService) GetCommitFileDiff(path, hash, filePath string) (string, err
 	return s.gitClient.CommitFileDiff(path, hash, filePath)
 }
 
-// FetchProject 拉取远程信息
-func (s *AppService) FetchProject(path string) (string, error) {
-	return s.gitClient.Fetch(path)
+// FetchProject 拉取远程信息（指定 remote，空则 fetch --all）
+func (s *AppService) FetchProject(path, remote string) (string, error) {
+	if remote == "" {
+		return s.gitClient.Fetch(path)
+	}
+	return s.gitClient.FetchRemote(path, remote)
 }
 
 // CommitLog 提交记录
@@ -791,25 +823,28 @@ func (s *AppService) CreateTag(path, name, message string) error {
 }
 
 // DeleteTag 删除标签（本地+远程）
-func (s *AppService) DeleteTag(path, name string) error {
+func (s *AppService) DeleteTag(path, name, remote string) error {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return fmt.Errorf("项目路径不存在: %s", path)
 	}
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("标签名不能为空")
+	}
+	if remote == "" {
+		remote = "origin"
 	}
 	// 删除本地标签
 	if _, err := s.gitClient.DeleteTag(path, name); err != nil {
 		return fmt.Errorf("删除本地标签失败: %w", err)
 	}
 	// 尝试删除远程标签（忽略错误，可能未推送过）
-	s.gitClient.DeleteRemoteTag(path, name)
+	s.gitClient.DeleteRemoteTagFrom(path, remote, name)
 	return nil
 }
 
 // PushTag 推送标签到远程
-func (s *AppService) PushTag(path, name string) error {
+func (s *AppService) PushTag(path, name, remote string) error {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return fmt.Errorf("项目路径不存在: %s", path)
 	}
@@ -817,7 +852,10 @@ func (s *AppService) PushTag(path, name string) error {
 	if name == "" {
 		return fmt.Errorf("标签名不能为空")
 	}
-	_, err := s.gitClient.PushTag(path, name)
+	if remote == "" {
+		remote = "origin"
+	}
+	_, err := s.gitClient.PushTagTo(path, remote, name)
 	return err
 }
 
@@ -869,11 +907,17 @@ func (s *AppService) MergeBranch(path, branch string) (string, error) {
 // --- 远程分支管理 ---
 
 // GetRemoteBranches 获取远程分支列表
-func (s *AppService) GetRemoteBranches(path string) ([]BranchInfo, error) {
+func (s *AppService) GetRemoteBranches(path, remote string) ([]BranchInfo, error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil, fmt.Errorf("项目路径不存在: %s", path)
 	}
-	out, err := s.gitClient.RemoteBranchList(path)
+	var out string
+	var err error
+	if remote == "" {
+		out, err = s.gitClient.RemoteBranchList(path)
+	} else {
+		out, err = s.gitClient.RemoteBranchListByRemote(path, remote)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("获取远程分支列表失败: %w", err)
 	}
@@ -907,7 +951,7 @@ func (s *AppService) CheckoutRemoteBranch(path, remoteBranch string) error {
 }
 
 // DeleteRemoteBranch 删除远程分支
-func (s *AppService) DeleteRemoteBranch(path, branch string) error {
+func (s *AppService) DeleteRemoteBranch(path, branch, remote string) error {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return fmt.Errorf("项目路径不存在: %s", path)
 	}
@@ -915,12 +959,15 @@ func (s *AppService) DeleteRemoteBranch(path, branch string) error {
 	if branch == "" {
 		return fmt.Errorf("分支名不能为空")
 	}
+	if remote == "" {
+		remote = "origin"
+	}
 	// origin/feature -> feature
 	localName := branch
 	if idx := strings.Index(branch, "/"); idx != -1 {
 		localName = branch[idx+1:]
 	}
-	_, err := s.gitClient.DeleteRemoteBranch(path, localName)
+	_, err := s.gitClient.DeleteRemoteBranchFrom(path, remote, localName)
 	return err
 }
 
@@ -1048,6 +1095,54 @@ func (s *AppService) GetAppSettings() *config.Settings {
 func (s *AppService) UpdateAppSettings(logLevel string) error {
 	s.config.Settings.LogLevel = logLevel
 	return config.SaveConfig(s.config)
+}
+
+// --- 远程仓库管理 ---
+
+// GetRemotes 获取项目所有远程仓库列表
+func (s *AppService) GetRemotes(path string) ([]RemoteItem, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, fmt.Errorf("项目路径不存在: %s", path)
+	}
+	remoteList, err := s.gitClient.RemoteList(path)
+	if err != nil {
+		return nil, fmt.Errorf("获取远程仓库列表失败: %w", err)
+	}
+	var remotes []RemoteItem
+	for _, r := range remoteList {
+		remotes = append(remotes, RemoteItem{Name: r.Name, URL: r.URL})
+	}
+	return remotes, nil
+}
+
+// AddRemote 添加远程仓库
+func (s *AppService) AddRemote(path, name, url string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("项目路径不存在: %s", path)
+	}
+	name = strings.TrimSpace(name)
+	url = strings.TrimSpace(url)
+	if name == "" {
+		return fmt.Errorf("远程名称不能为空")
+	}
+	if url == "" {
+		return fmt.Errorf("远程地址不能为空")
+	}
+	_, err := s.gitClient.AddRemote(path, name, url)
+	return err
+}
+
+// RemoveRemote 删除远程仓库
+func (s *AppService) RemoveRemote(path, name string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("项目路径不存在: %s", path)
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("远程名称不能为空")
+	}
+	_, err := s.gitClient.RemoveRemote(path, name)
+	return err
 }
 
 // --- 冲突处理 ---
@@ -1211,7 +1306,10 @@ type BatchPullResult struct {
 }
 
 // BatchPull 批量拉取指定项目
-func (s *AppService) BatchPull(paths []string) []BatchPullResult {
+func (s *AppService) BatchPull(paths []string, remote string) []BatchPullResult {
+	if remote == "" {
+		remote = "origin"
+	}
 	var results []BatchPullResult
 	for _, path := range paths {
 		result := BatchPullResult{Path: path}
@@ -1229,7 +1327,7 @@ func (s *AppService) BatchPull(paths []string) []BatchPullResult {
 			results = append(results, result)
 			continue
 		}
-		_, err = s.gitClient.Run(path, "pull", "origin", strings.TrimSpace(branch))
+		_, err = s.gitClient.PullFrom(path, remote, strings.TrimSpace(branch))
 		if err != nil {
 			result.Message = err.Error()
 		} else {
@@ -1242,7 +1340,10 @@ func (s *AppService) BatchPull(paths []string) []BatchPullResult {
 }
 
 // BatchPush 批量推送指定项目
-func (s *AppService) BatchPush(paths []string) []BatchPullResult {
+func (s *AppService) BatchPush(paths []string, remote string) []BatchPullResult {
+	if remote == "" {
+		remote = "origin"
+	}
 	var results []BatchPullResult
 	for _, path := range paths {
 		result := BatchPullResult{Path: path}
@@ -1259,7 +1360,7 @@ func (s *AppService) BatchPush(paths []string) []BatchPullResult {
 			results = append(results, result)
 			continue
 		}
-		_, err = s.gitClient.Run(path, "push", "origin", strings.TrimSpace(branch))
+		_, err = s.gitClient.PushTo(path, remote, strings.TrimSpace(branch))
 		if err != nil {
 			result.Message = err.Error()
 		} else {

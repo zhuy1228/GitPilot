@@ -54,6 +54,17 @@ export function AddProject(platform, username, name, path) {
 }
 
 /**
+ * AddRemote 添加远程仓库
+ * @param {string} path
+ * @param {string} name
+ * @param {string} url
+ * @returns {$CancellablePromise<void>}
+ */
+export function AddRemote(path, name, url) {
+    return $Call.ByID(3697916441, path, name, url);
+}
+
+/**
  * AddUser 添加用户到指定平台
  * @param {string} platform
  * @param {string} username
@@ -67,10 +78,11 @@ export function AddUser(platform, username, token) {
 /**
  * BatchPull 批量拉取指定项目
  * @param {string[]} paths
+ * @param {string} remote
  * @returns {$CancellablePromise<$models.BatchPullResult[]>}
  */
-export function BatchPull(paths) {
-    return $Call.ByID(758996647, paths).then(/** @type {($result: any) => any} */(($result) => {
+export function BatchPull(paths, remote) {
+    return $Call.ByID(758996647, paths, remote).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -78,10 +90,11 @@ export function BatchPull(paths) {
 /**
  * BatchPush 批量推送指定项目
  * @param {string[]} paths
+ * @param {string} remote
  * @returns {$CancellablePromise<$models.BatchPullResult[]>}
  */
-export function BatchPush(paths) {
-    return $Call.ByID(794082076, paths).then(/** @type {($result: any) => any} */(($result) => {
+export function BatchPush(paths, remote) {
+    return $Call.ByID(794082076, paths, remote).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -165,20 +178,22 @@ export function DeleteBranch(path, name, force) {
  * DeleteRemoteBranch 删除远程分支
  * @param {string} path
  * @param {string} branch
+ * @param {string} remote
  * @returns {$CancellablePromise<void>}
  */
-export function DeleteRemoteBranch(path, branch) {
-    return $Call.ByID(2626609049, path, branch);
+export function DeleteRemoteBranch(path, branch, remote) {
+    return $Call.ByID(2626609049, path, branch, remote);
 }
 
 /**
  * DeleteTag 删除标签（本地+远程）
  * @param {string} path
  * @param {string} name
+ * @param {string} remote
  * @returns {$CancellablePromise<void>}
  */
-export function DeleteTag(path, name) {
-    return $Call.ByID(873653241, path, name);
+export function DeleteTag(path, name, remote) {
+    return $Call.ByID(873653241, path, name, remote);
 }
 
 /**
@@ -192,12 +207,13 @@ export function DiscardFiles(path, files) {
 }
 
 /**
- * FetchProject 拉取远程信息
+ * FetchProject 拉取远程信息（指定 remote，空则 fetch --all）
  * @param {string} path
+ * @param {string} remote
  * @returns {$CancellablePromise<string>}
  */
-export function FetchProject(path) {
-    return $Call.ByID(3541106829, path);
+export function FetchProject(path, remote) {
+    return $Call.ByID(3541106829, path, remote);
 }
 
 /**
@@ -383,11 +399,23 @@ export function GetProjectTree() {
 /**
  * GetRemoteBranches 获取远程分支列表
  * @param {string} path
+ * @param {string} remote
  * @returns {$CancellablePromise<$models.BranchInfo[]>}
  */
-export function GetRemoteBranches(path) {
-    return $Call.ByID(994796370, path).then(/** @type {($result: any) => any} */(($result) => {
+export function GetRemoteBranches(path, remote) {
+    return $Call.ByID(994796370, path, remote).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType8($result);
+    }));
+}
+
+/**
+ * GetRemotes 获取项目所有远程仓库列表
+ * @param {string} path
+ * @returns {$CancellablePromise<$models.RemoteItem[]>}
+ */
+export function GetRemotes(path) {
+    return $Call.ByID(975520027, path).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType26($result);
     }));
 }
 
@@ -398,7 +426,7 @@ export function GetRemoteBranches(path) {
  */
 export function GetStashList(path) {
     return $Call.ByID(1948257945, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType26($result);
+        return $$createType28($result);
     }));
 }
 
@@ -409,7 +437,7 @@ export function GetStashList(path) {
  */
 export function GetTags(path) {
     return $Call.ByID(3979169621, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType28($result);
+        return $$createType30($result);
     }));
 }
 
@@ -421,7 +449,7 @@ export function GetTags(path) {
  */
 export function GetUserInfo(platform, username) {
     return $Call.ByID(2674655707, platform, username).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType30($result);
+        return $$createType32($result);
     }));
 }
 
@@ -455,31 +483,34 @@ export function MergeBranch(path, branch) {
 }
 
 /**
- * PullProject 拉取项目（当前分支）
+ * PullProject 拉取项目（当前分支，指定 remote）
  * @param {string} path
+ * @param {string} remote
  * @returns {$CancellablePromise<string>}
  */
-export function PullProject(path) {
-    return $Call.ByID(4145813996, path);
+export function PullProject(path, remote) {
+    return $Call.ByID(4145813996, path, remote);
 }
 
 /**
- * PushProject 推送项目（当前分支）
+ * PushProject 推送项目（当前分支，指定 remote）
  * @param {string} path
+ * @param {string} remote
  * @returns {$CancellablePromise<string>}
  */
-export function PushProject(path) {
-    return $Call.ByID(3887901113, path);
+export function PushProject(path, remote) {
+    return $Call.ByID(3887901113, path, remote);
 }
 
 /**
  * PushTag 推送标签到远程
  * @param {string} path
  * @param {string} name
+ * @param {string} remote
  * @returns {$CancellablePromise<void>}
  */
-export function PushTag(path, name) {
-    return $Call.ByID(1424810524, path, name);
+export function PushTag(path, name, remote) {
+    return $Call.ByID(1424810524, path, name, remote);
 }
 
 /**
@@ -500,6 +531,16 @@ export function RemovePlatform(name) {
  */
 export function RemoveProject(platform, username, name) {
     return $Call.ByID(2748109581, platform, username, name);
+}
+
+/**
+ * RemoveRemote 删除远程仓库
+ * @param {string} path
+ * @param {string} name
+ * @returns {$CancellablePromise<void>}
+ */
+export function RemoveRemote(path, name) {
+    return $Call.ByID(2915623022, path, name);
 }
 
 /**
@@ -748,9 +789,11 @@ const $$createType21 = $models.ProjectStatus.createFrom;
 const $$createType22 = $Create.Nullable($$createType21);
 const $$createType23 = $models.TreeNode.createFrom;
 const $$createType24 = $Create.Array($$createType23);
-const $$createType25 = $models.StashInfo.createFrom;
+const $$createType25 = $models.RemoteItem.createFrom;
 const $$createType26 = $Create.Array($$createType25);
-const $$createType27 = $models.TagInfo.createFrom;
+const $$createType27 = $models.StashInfo.createFrom;
 const $$createType28 = $Create.Array($$createType27);
-const $$createType29 = $models.UserInfo.createFrom;
-const $$createType30 = $Create.Nullable($$createType29);
+const $$createType29 = $models.TagInfo.createFrom;
+const $$createType30 = $Create.Array($$createType29);
+const $$createType31 = $models.UserInfo.createFrom;
+const $$createType32 = $Create.Nullable($$createType31);

@@ -507,6 +507,20 @@ export class ProjectStatus {
              */
             this["remoteUrl"] = "";
         }
+        if (!("remotes" in $$source)) {
+            /**
+             * @member
+             * @type {RemoteItem[]}
+             */
+            this["remotes"] = [];
+        }
+        if (!("currentRemote" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["currentRemote"] = "";
+        }
         if (!("changedFiles" in $$source)) {
             /**
              * @member
@@ -525,11 +539,53 @@ export class ProjectStatus {
      */
     static createFrom($$source = {}) {
         const $$createField2_0 = $$createType1;
+        const $$createField4_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("remotes" in $$parsedSource) {
+            $$parsedSource["remotes"] = $$createField2_0($$parsedSource["remotes"]);
+        }
         if ("changedFiles" in $$parsedSource) {
-            $$parsedSource["changedFiles"] = $$createField2_0($$parsedSource["changedFiles"]);
+            $$parsedSource["changedFiles"] = $$createField4_0($$parsedSource["changedFiles"]);
         }
         return new ProjectStatus(/** @type {Partial<ProjectStatus>} */($$parsedSource));
+    }
+}
+
+/**
+ * RemoteItem 远程仓库信息
+ */
+export class RemoteItem {
+    /**
+     * Creates a new RemoteItem instance.
+     * @param {Partial<RemoteItem>} [$$source = {}] - The source object to create the RemoteItem.
+     */
+    constructor($$source = {}) {
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("url" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["url"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RemoteItem instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {RemoteItem}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RemoteItem(/** @type {Partial<RemoteItem>} */($$parsedSource));
     }
 }
 
@@ -692,7 +748,7 @@ export class TreeNode {
      * @returns {TreeNode}
      */
     static createFrom($$source = {}) {
-        const $$createField4_0 = $$createType3;
+        const $$createField4_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("children" in $$parsedSource) {
             $$parsedSource["children"] = $$createField4_0($$parsedSource["children"]);
@@ -740,7 +796,9 @@ export class UserInfo {
 }
 
 // Private type creation functions
-const $$createType0 = FileInfo.createFrom;
+const $$createType0 = RemoteItem.createFrom;
 const $$createType1 = $Create.Array($$createType0);
-const $$createType2 = TreeNode.createFrom;
+const $$createType2 = FileInfo.createFrom;
 const $$createType3 = $Create.Array($$createType2);
+const $$createType4 = TreeNode.createFrom;
+const $$createType5 = $Create.Array($$createType4);

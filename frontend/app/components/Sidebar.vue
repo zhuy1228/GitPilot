@@ -457,7 +457,7 @@ async function doBatchPull() {
   if (!selectedBatchPaths.value.length) return
   batchActionLoading.value = 'pull'
   try {
-    const results = await AppService.BatchPull(selectedBatchPaths.value)
+    const results = await AppService.BatchPull(selectedBatchPaths.value, 'origin')
     batchResults.value = Array.isArray(results) ? results : []
     const successCount = batchResults.value.filter(r => r.success).length
     message.info(`批量 Pull 完成：${successCount}/${batchResults.value.length} 成功`)
@@ -473,7 +473,7 @@ async function doBatchPush() {
   if (!selectedBatchPaths.value.length) return
   batchActionLoading.value = 'push'
   try {
-    const results = await AppService.BatchPush(selectedBatchPaths.value)
+    const results = await AppService.BatchPush(selectedBatchPaths.value, 'origin')
     batchResults.value = Array.isArray(results) ? results : []
     const successCount = batchResults.value.filter(r => r.success).length
     message.info(`批量 Push 完成：${successCount}/${batchResults.value.length} 成功`)

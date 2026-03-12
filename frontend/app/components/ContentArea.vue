@@ -90,6 +90,15 @@ const newBranchName = ref('')
 const createBranchLoading = ref(false)
 const remoteBranches = ref([])
 
+// ---- Remote 远程仓库 ----
+const remotes = ref([])
+const currentRemote = ref('origin')
+const showRemoteDropdown = ref(false)
+const showAddRemote = ref(false)
+const newRemoteName = ref('')
+const newRemoteUrl = ref('')
+const addRemoteLoading = ref(false)
+
 // ---- Stash 贮藏管理 ----
 const stashList = ref([])
 const stashLoading = ref(false)
@@ -248,7 +257,14 @@ async function loadStatus() {
       status.value = {
         branch: result.branch || '',
         remoteUrl: result.remoteUrl || result.remoteURL || '',
+        remotes: Array.isArray(result.remotes) ? result.remotes : [],
+        currentRemote: result.currentRemote || 'origin',
         changedFiles: [],
+      }
+      // 同步 remotes
+      remotes.value = status.value.remotes
+      if (remotes.value.length && !remotes.value.find(r => r.name === currentRemote.value)) {
+        currentRemote.value = remotes.value[0].name
       }
     } else {
       errorMsg.value = '获取项目状态返回空值: ' + JSON.stringify(result)
@@ -512,11 +528,11 @@ async function gitAction(action) {
   actionLoading.value = action
   try {
     if (action === 'pull') {
-      await AppService.PullProject(props.project.path)
+      await AppService.PullProject(props.project.path, currentRemote.value)
     } else if (action === 'push') {
-      await AppService.PushProject(props.project.path)
+      await AppService.PushProject(props.project.path, currentRemote.value)
     } else {
-      await AppService.FetchProject(props.project.path)
+      await AppService.FetchProject(props.project.path, currentRemote.value)
     }
     await loadStatus()
   } catch (e) {
@@ -675,7 +691,7 @@ async function mergeBranch(branchName) {
 async function loadRemoteBranches() {
   if (!props.project?.path) return
   try {
-    const list = await AppService.GetRemoteBranches(props.project.path)
+    const list = await AppService.GetRemoteBranches(props.project.path, currentRemote.value)
     remoteBranches.value = Array.isArray(list) ? list : []
   } catch (e) {
     console.error('获取远程分支失败:', e)
@@ -709,7 +725,7 @@ async function deleteRemoteBranch(remoteBranch) {
     okButtonProps: { danger: true },
     async onOk() {
       try {
-        await AppService.DeleteRemoteBranch(props.project.path, remoteBranch)
+        await AppService.DeleteRemoteBranch(props.project.path, remoteBranch, currentRemote.value)
         await loadRemoteBranches()
         message.success(`远程分支 ${remoteBranch} 已删除`)
       } catch (e) {
@@ -1130,7 +1146,7 @@ async function deleteTag(tag) {
     okButtonProps: { danger: true },
     async onOk() {
       try {
-        await AppService.DeleteTag(props.project.path, tag.name)
+        await AppService.DeleteTag(props.project.path, tag.name, currentRemote.value)
         await loadTags()
       } catch (e) {
         console.error('删除标签失败:', e)
@@ -1143,7 +1159,7 @@ async function deleteTag(tag) {
 async function pushTag(tag) {
   if (!props.project?.path) return
   try {
-    await AppService.PushTag(props.project.path, tag.name)
+    await AppService.PushTag(props.project.path, tag.name, currentRemote.value)
     Modal.success({ title: '推送成功', content: `标签 ${tag.name} 已推送到远程` })
   } catch (e) {
     console.error('推送标签失败:', e)
@@ -1156,6 +1172,63 @@ watch(activeTab, (tab) => {
   if (tab === 'tags' && !tags.value.length && !tagsLoading.value) {
     loadTags()
   }
+})
+
+// ---- Remote 远程仓库管理 ----
+async function switchRemote(remoteName) {
+  currentRemote.value = remoteName
+  showRemoteDropdown.value = false
+  // 切换 remote 后刷新远程分支
+  await loadRemoteBranches()
+}
+
+async function addRemote() {
+  if (!props.project?.path || !newRemoteName.value.trim() || !newRemoteUrl.value.trim()) return
+  addRemoteLoading.value = true
+  try {
+    await AppService.AddRemote(props.project.path, newRemoteName.value.trim(), newRemoteUrl.value.trim())
+    newRemoteName.value = ''
+    newRemoteUrl.value = ''
+    showAddRemote.value = false
+    message.success('远程仓库添加成功')
+    await loadStatus()
+  } catch (e) {
+    Modal.error({ title: '添加远程仓库失败', content: String(e) })
+  } finally {
+    addRemoteLoading.value = false
+  }
+}
+
+async function removeRemote(remoteName) {
+  if (!props.project?.path) return
+  Modal.confirm({
+    title: '确认删除远程仓库',
+    icon: h(ExclamationCircleOutlined),
+    content: h('div', [
+      h('p', '确定要删除远程仓库吗？'),
+      h('p', { style: 'font-family: monospace; color: #f38ba8; font-size: 15px;' }, remoteName),
+    ]),
+    okText: '删除',
+    cancelText: '取消',
+    okButtonProps: { danger: true },
+    async onOk() {
+      try {
+        await AppService.RemoveRemote(props.project.path, remoteName)
+        message.success(`远程仓库 ${remoteName} 已删除`)
+        if (currentRemote.value === remoteName) {
+          currentRemote.value = 'origin'
+        }
+        await loadStatus()
+      } catch (e) {
+        Modal.error({ title: '删除远程仓库失败', content: String(e) })
+      }
+    },
+  })
+}
+
+const currentRemoteUrl = computed(() => {
+  const r = remotes.value.find(r => r.name === currentRemote.value)
+  return r ? r.url : status.value?.remoteUrl || ''
 })
 </script>
 
@@ -1271,7 +1344,58 @@ watch(activeTab, (tab) => {
                   </div>
                 </template>
               </a-dropdown>
-              <span v-if="status.remoteUrl" class="remote-url" :title="status.remoteUrl">{{ status.remoteUrl }}</span>
+              <span v-if="status.remoteUrl" class="remote-url" :title="currentRemoteUrl">
+                <a-dropdown :open="showRemoteDropdown" @openChange="v => showRemoteDropdown = v" :trigger="['click']">
+                  <span class="remote-selector" @click.prevent="showRemoteDropdown = !showRemoteDropdown">
+                    <GlobalOutlined style="margin-right: 4px;" />
+                    {{ currentRemote }}
+                    <CaretDownOutlined style="font-size: 10px; margin-left: 2px;" />
+                  </span>
+                  <template #overlay>
+                    <div class="remote-dropdown">
+                      <div class="branch-dropdown-title">远程仓库</div>
+                      <div class="branch-dropdown-list">
+                        <div
+                          v-for="r in remotes"
+                          :key="r.name"
+                          class="branch-dropdown-item"
+                          :class="{ active: r.name === currentRemote }"
+                        >
+                          <div class="branch-item-main" @click="switchRemote(r.name)">
+                            <GlobalOutlined style="font-size: 12px; margin-right: 6px;" />
+                            <span class="branch-item-name">{{ r.name }}</span>
+                            <span v-if="r.name === currentRemote" style="margin-left: auto; color: var(--success, #a6e3a1);">✓</span>
+                          </div>
+                          <div class="branch-item-actions" @click.stop>
+                            <a-tooltip :title="r.url">
+                              <span class="branch-action-btn" style="cursor: default; opacity: 0.6; font-size: 10px;">URL</span>
+                            </a-tooltip>
+                            <a-tooltip title="删除远程仓库" v-if="r.name !== 'origin'">
+                              <span class="branch-action-btn danger" @click="removeRemote(r.name)"><DeleteOutlined /></span>
+                            </a-tooltip>
+                          </div>
+                        </div>
+                        <div v-if="!remotes.length" style="padding: 12px; text-align: center; color: var(--text-muted);">
+                          无远程仓库
+                        </div>
+                      </div>
+                      <!-- 添加远程仓库 -->
+                      <div v-if="!showAddRemote" class="remote-add-btn" @click="showAddRemote = true">
+                        <PlusOutlined /> 添加远程仓库
+                      </div>
+                      <div v-else class="remote-add-form">
+                        <a-input v-model:value="newRemoteName" placeholder="名称 (如 upstream)" size="small" style="margin-bottom: 4px;" />
+                        <a-input v-model:value="newRemoteUrl" placeholder="仓库地址" size="small" style="margin-bottom: 4px;" />
+                        <div style="display: flex; gap: 4px;">
+                          <a-button size="small" type="primary" :loading="addRemoteLoading" :disabled="!newRemoteName.trim() || !newRemoteUrl.trim()" @click="addRemote" style="flex: 1;">添加</a-button>
+                          <a-button size="small" @click="showAddRemote = false; newRemoteName = ''; newRemoteUrl = ''">取消</a-button>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                </a-dropdown>
+                <span class="remote-url-text" :title="currentRemoteUrl">{{ currentRemoteUrl }}</span>
+              </span>
             </template>
           </div>
           <a-space class="project-actions">
@@ -1898,6 +2022,56 @@ watch(activeTab, (tab) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.remote-selector {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--accent, #89b4fa);
+  font-weight: 500;
+  transition: background 0.2s;
+}
+.remote-selector:hover {
+  background: var(--hover-bg, rgba(137, 180, 250, 0.1));
+}
+
+.remote-url-text {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-dropdown {
+  background: var(--dropdown-bg, #1e1e2e);
+  border: 1px solid var(--border-color, #313244);
+  border-radius: 8px;
+  padding: 8px 0;
+  min-width: 280px;
+  max-width: 400px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+.remote-add-btn {
+  padding: 8px 12px;
+  color: var(--accent, #89b4fa);
+  cursor: pointer;
+  font-size: 12px;
+  border-top: 1px solid var(--border-color, #313244);
+  margin-top: 4px;
+}
+.remote-add-btn:hover {
+  background: var(--hover-bg, rgba(137, 180, 250, 0.08));
+}
+.remote-add-form {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-color, #313244);
+  margin-top: 4px;
 }
 
 .project-actions {

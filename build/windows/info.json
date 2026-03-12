@@ -1,10 +1,10 @@
 {
 	"fixed": {
-		"file_version": "0.3.0"
+		"file_version": "0.3.1"
 	},
 	"info": {
 		"0000": {
-			"ProductVersion": "0.3.0",
+			"ProductVersion": "0.3.1",
 			"CompanyName": "GitPilot",
 			"FileDescription": "Git Repository Management Tool",
 			"LegalCopyright": "© 2025, GitPilot",

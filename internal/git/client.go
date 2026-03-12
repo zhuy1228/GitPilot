@@ -60,6 +60,21 @@ func (g *GitClient) Push(path string) (string, error) {
 	return g.Run(path, "push")
 }
 
+// PushTo 推送到指定远程
+func (g *GitClient) PushTo(path, remote, branch string) (string, error) {
+	return g.Run(path, "push", remote, branch)
+}
+
+// PullFrom 从指定远程拉取
+func (g *GitClient) PullFrom(path, remote, branch string) (string, error) {
+	return g.Run(path, "pull", remote, branch)
+}
+
+// FetchRemote 拉取指定远程信息
+func (g *GitClient) FetchRemote(path, remote string) (string, error) {
+	return g.Run(path, "fetch", remote)
+}
+
 func (g *GitClient) Status(path string) (string, error) {
 	return g.Run(path, "status")
 }
@@ -91,6 +106,47 @@ func (g *GitClient) Clone(repoURL, path string) (string, error) {
 
 func (g *GitClient) Fetch(path string) (string, error) {
 	return g.Run(path, "fetch", "--all")
+}
+
+// RemoteList 获取所有远程仓库列表 (git remote -v)
+type RemoteInfo struct {
+	Name string
+	URL  string
+}
+
+func (g *GitClient) RemoteList(path string) ([]RemoteInfo, error) {
+	out, err := g.Run(path, "remote", "-v")
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]bool)
+	var remotes []RemoteInfo
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue
+		}
+		name := parts[0]
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		remotes = append(remotes, RemoteInfo{Name: name, URL: parts[1]})
+	}
+	return remotes, nil
+}
+
+// AddRemote 添加远程仓库
+func (g *GitClient) AddRemote(path, name, url string) (string, error) {
+	return g.Run(path, "remote", "add", name, url)
+}
+
+// RemoveRemote 删除远程仓库
+func (g *GitClient) RemoveRemote(path, name string) (string, error) {
+	return g.Run(path, "remote", "remove", name)
 }
 
 func (g *GitClient) RemoteURL(path string) (string, error) {
@@ -141,9 +197,14 @@ func (g *GitClient) Log(path string, count int) (string, error) {
 	)
 }
 
-// UnpushedCommits 获取当前分支上未推送到远程的提交哈希列表
+// UnpushedCommits 获取当前分支上未推送到远程的提交哈希列表（默认 origin）
 func (g *GitClient) UnpushedCommits(path, branch string) (string, error) {
 	return g.Run(path, "rev-list", "origin/"+branch+"..HEAD")
+}
+
+// UnpushedCommitsTo 获取当前分支上未推送到指定远程的提交哈希列表
+func (g *GitClient) UnpushedCommitsTo(path, remote, branch string) (string, error) {
+	return g.Run(path, "rev-list", remote+"/"+branch+"..HEAD")
 }
 
 // RevertCommit 撤回指定提交（创建一个反向提交）
@@ -167,14 +228,24 @@ func (g *GitClient) DeleteTag(path, name string) (string, error) {
 	return g.Run(path, "tag", "-d", name)
 }
 
-// PushTag 推送标签到远程
+// PushTag 推送标签到远程（默认 origin）
 func (g *GitClient) PushTag(path, name string) (string, error) {
 	return g.Run(path, "push", "origin", name)
 }
 
-// DeleteRemoteTag 删除远程标签
+// PushTagTo 推送标签到指定远程
+func (g *GitClient) PushTagTo(path, remote, name string) (string, error) {
+	return g.Run(path, "push", remote, name)
+}
+
+// DeleteRemoteTag 删除远程标签（默认 origin）
 func (g *GitClient) DeleteRemoteTag(path, name string) (string, error) {
 	return g.Run(path, "push", "origin", "--delete", name)
+}
+
+// DeleteRemoteTagFrom 删除指定远程的标签
+func (g *GitClient) DeleteRemoteTagFrom(path, remote, name string) (string, error) {
+	return g.Run(path, "push", remote, "--delete", name)
 }
 
 // BranchList 获取所有本地分支
@@ -368,14 +439,24 @@ func (g *GitClient) MergeBranch(path, branch string) (string, error) {
 	return g.Run(path, "merge", branch)
 }
 
-// DeleteRemoteBranch 删除远程分支
+// DeleteRemoteBranch 删除远程分支（默认 origin）
 func (g *GitClient) DeleteRemoteBranch(path, branch string) (string, error) {
 	return g.Run(path, "push", "origin", "--delete", branch)
+}
+
+// DeleteRemoteBranchFrom 删除指定远程的分支
+func (g *GitClient) DeleteRemoteBranchFrom(path, remote, branch string) (string, error) {
+	return g.Run(path, "push", remote, "--delete", branch)
 }
 
 // RemoteBranchList 获取所有远程分支
 func (g *GitClient) RemoteBranchList(path string) (string, error) {
 	return g.Run(path, "branch", "-r", "--format=%(refname:short)")
+}
+
+// RemoteBranchListByRemote 获取指定远程的分支
+func (g *GitClient) RemoteBranchListByRemote(path, remote string) (string, error) {
+	return g.Run(path, "branch", "-r", "--list", remote+"/*", "--format=%(refname:short)")
 }
 
 // CheckoutNewBranch 从远程分支检出新本地分支

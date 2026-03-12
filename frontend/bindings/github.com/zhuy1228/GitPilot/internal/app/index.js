@@ -19,6 +19,7 @@ export {
     PlatformInfo,
     ProjectOverview,
     ProjectStatus,
+    RemoteItem,
     StashInfo,
     TagInfo,
     TreeNode,
